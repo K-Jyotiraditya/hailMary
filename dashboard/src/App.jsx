@@ -1,185 +1,217 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './index.css';
 
-// Mocked output matching Python pipeline
-const INITIAL_DATA = {
-  regime: {
-    mode: "HEDGE",
-    adx_trend: 18.4,
-    vol_target_scalar: 0.85,
-    status: "Volatility Elevated - Limiting Exposure"
+// Synthetic structural data mirroring live algorithm state
+const SYS_STATE = {
+  modelHealth: {
+    backtestIC: 0.0434, // S&P 100 actual extracted IC
+    liveIC: 0.0392,
+    featureDrift: 0.012, // PSI index
+    nextRetrain: "14 Days",
+    pbo: 0.91,
+    dsr: 1.84,
+    baggingConf: "±1.22%"
   },
-  weights: [
-    { ticker: "AAPL", currentWeight: "0%", targetWeight: "15%", delta: "+15%" },
-    { ticker: "MSFT", currentWeight: "10%", targetWeight: "10%", delta: "0%" },
-    { ticker: "NVDA", currentWeight: "12%", targetWeight: "0%", delta: "-12%" },
-    { ticker: "TSLA", currentWeight: "0%", targetWeight: "5%", delta: "+5%" },
+  regime: {
+    adxScore: 18.4,
+    adxLabel: "Weak Trend → Limiting Base Exposure",
+    sma200Dist: "-1.5%",
+    combinedScore: 0.35,
+    realizedVol: 0.142,
+    targetVol: 0.12,
+    scaler: 0.84, // 12/14.2
+    stripHistory: Array.from({ length: 60 }, (_, i) => Math.random() > 0.8 ? "danger" : Math.random() > 0.4 ? "warning" : "safe")
+  },
+  performance: {
+    maxDD: "-3.41%",
+    currentDD: "-0.84%",
+    hitRate: "54.6%",
+    sharpe60d: 1.12,
+    mtd: "+1.4%",
+    ytd: "+8.2%"
+  },
+  positions: [
+    { ticker: "AAPL", exp: "15%", attr: "vol_60(-1.2) mom_20(+2.1)", drift: 0.01 },
+    { ticker: "MSFT", exp: "10%", attr: "mean_abs_ic(+1.5) MACD(+0.8)", drift: 0.02 },
+    { ticker: "NVDA", exp: "12%", attr: "dollar_vol(+2.4) vs_vwap(+1.1)", drift: -0.01 }
   ],
-  alpacaStatus: "CONNECTED - PAPER"
+  execution: {
+    routing: "ALPACA (US EQ)",
+    cash: "$63,000",
+    nav: "$100,000",
+    slippageModel: "ADV Square-root (Est. 2bps)",
+    lastFetch: "2026-05-06T15:55:01Z"
+  }
 };
 
 function App() {
-  const [data, setData] = useState(INITIAL_DATA);
   const [executing, setExecuting] = useState(false);
-  const [executionLog, setExecutionLog] = useState([]);
+  const [log, setLog] = useState([]);
 
-  const changeMode = (mode) => {
-    let status = mode === "HEDGE" ? "Volatility Elevated - Limiting Exposure" :
-      mode === "BALANCED" ? "Momentum Tracked - Stable Allocation" : "Uncapped Exposure - Hunting Alpha";
-    setData(prev => ({
-      ...prev,
-      regime: { ...prev.regime, mode, status, vol_target_scalar: mode === "HEDGE" ? 0.85 : mode === "BALANCED" ? 1.5 : 2.5 }
-    }));
-  };
-
-  const handleExecute = () => {
+  const handleRebalance = () => {
     setExecuting(true);
-    setExecutionLog(["Initiating Broker Protocol..."]);
-
-    setTimeout(() => setExecutionLog(p => [...p, "> Fetching Live Account Balances from Alpaca..."]), 800);
-    setTimeout(() => setExecutionLog(p => [...p, "> Calculating Differential Slivers..."]), 1600);
-    setTimeout(() => setExecutionLog(p => [...p, "  ✓ Dispatched SELL NVDA (Liquidating $12,000)"]), 2400);
-    setTimeout(() => setExecutionLog(p => [...p, "  ✓ Dispatched BUY AAPL (Deploying $15,000)"]), 3000);
-    setTimeout(() => setExecutionLog(p => [...p, "  ✓ Dispatched BUY TSLA (Deploying $5,000)"]), 3600);
+    setLog(["[SYS] Dispatching API Call to Execution Node..."]);
+    setTimeout(() => setLog(p => [...p, "[API] NAV: 100000.0 | Cash: 63000.0"]), 500);
+    setTimeout(() => setLog(p => [...p, "[EXEC] AAPL Target Diff: $15,000 -> Constructing Bracket..."]), 1200);
+    setTimeout(() => setLog(p => [...p, "[EXEC] NVDA Target Diff: -$12,000 -> Constructing MKT..."]), 1600);
+    setTimeout(() => setLog(p => [...p, "[FILL] NVDA 124 shares @ MKT | Realized Slippage: 1.4bps"]), 2200);
+    setTimeout(() => setLog(p => [...p, "[FILL] AAPL 88 shares @ MKT | Realized Slippage: 1.8bps"]), 2600);
     setTimeout(() => {
-      setExecutionLog(p => [...p, "SUCCESS: Live Portfolio Aligned with Target Weights."]);
+      setLog(p => [...p, "[SYS] Recon Complete. Target weights secured."]);
       setExecuting(false);
-      setData(prev => ({
-        ...prev,
-        weights: prev.weights.map(w => ({ ...w, currentWeight: w.targetWeight, delta: "0%" }))
-      }));
-    }, 4500);
+    }, 3200);
   };
 
   return (
     <div className="dashboard-container">
-      <header className="flex-row animate-fade-in" style={{ justifyContent: 'space-between', marginBottom: '2.5rem' }}>
-        <div className="flex-col" style={{ gap: '0.2rem' }}>
-          <h1 className="text-cyan">HailMary Quantitative Engine</h1>
-          <p className="text-muted">Live Machine Learning Signal Architecture</p>
+      <header className="terminal-header">
+        <div>
+          <h1 className="terminal-title">HAILMARY OEX / S&P 100</h1>
+          <span className="text-dim">SYS_VER: P5 COMBINATORIAL PURGED | OOS DEFLATED (DSR: {SYS_STATE.modelHealth.dsr})</span>
         </div>
-        <div className="glass-panel flex-row" style={{ padding: '0.8rem 1.5rem', borderRadius: '30px' }}>
-          <div className="pulse-orb"></div>
-          <span style={{ fontWeight: 600, letterSpacing: '0.05em' }}>{data.alpacaStatus}</span>
+        <div style={{ textAlign: 'right' }}>
+          <span className="text-info tracking-wide">LIVE.ALPACA</span><br />
+          <span className="text-dim">{SYS_STATE.execution.lastFetch}</span>
         </div>
       </header>
 
-      <div className="grid-3 animate-fade-in delay-1">
-        {/* Risk Profile Selector */}
-        <div className="glass-panel flex-col">
-          <h3 className="text-muted">ACTIVE RISK PROFILE</h3>
-          <div className="flex-col" style={{ marginTop: '0.5rem' }}>
-            {['HEDGE', 'BALANCED', 'GROWTH'].map(m => (
-              <button
-                key={m}
-                onClick={() => changeMode(m)}
-                className={`badge ${data.regime.mode === m ? 'active' : ''}`}
-                style={{ width: '100%', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-              >
-                <span>{m} MODE</span>
-                {data.regime.mode === m && <span className="text-cyan">⚙</span>}
-              </button>
-            ))}
+      <div className="grid-main">
+        {/* LEFT COLUMN: PERFORMANCE & HEALTH */}
+        <div className="flex-col">
+          <div className="panel">
+            <div className="panel-header">Performance & Risk</div>
+            <div className="grid-2">
+              <div>
+                <div className="metric-label">CURRENT DD vs MAX DD</div>
+                <div className="metric-val text-white">{SYS_STATE.performance.currentDD} / <span className="text-dim">{SYS_STATE.performance.maxDD}</span></div>
+              </div>
+              <div>
+                <div className="metric-label">ROLLING 60D SHARPE</div>
+                <div className="metric-val text-info">{SYS_STATE.performance.sharpe60d}</div>
+              </div>
+              <div>
+                <div className="metric-label">HIT RATE (WIN/LOSS)</div>
+                <div className="metric-val text-white">{SYS_STATE.performance.hitRate}</div>
+              </div>
+              <div>
+                <div className="metric-label">MTD / YTD RET</div>
+                <div className="metric-val text-pos">{SYS_STATE.performance.mtd} / {SYS_STATE.performance.ytd}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-header">Model Health & Validation</div>
+            <div className="flex-between">
+              <span className="text-dim">LIVE IC VS BACKTEST IC</span>
+              <span className="text-white">{SYS_STATE.modelHealth.liveIC} / {SYS_STATE.modelHealth.backtestIC}</span>
+            </div>
+            <div className="progress-bar-bg"><div className="progress-bar-fill" style={{ width: `${(SYS_STATE.modelHealth.liveIC / SYS_STATE.modelHealth.backtestIC) * 100}%`, background: 'var(--positive)' }}></div></div>
+
+            <div className="flex-between" style={{ marginTop: '0.4rem' }}>
+              <span className="text-dim">FEATURE DRIFT (PSI)</span>
+              <span className={SYS_STATE.modelHealth.featureDrift > 0.05 ? "text-neg" : "text-white"}>{SYS_STATE.modelHealth.featureDrift}</span>
+            </div>
+            <div className="flex-between">
+              <span className="text-dim">PROBABILITY OF OVERFIT (PBO)</span>
+              <span className="text-white">{SYS_STATE.modelHealth.pbo}</span>
+            </div>
+            <div className="flex-between">
+              <span className="text-dim">BAGGED INTERVAL</span>
+              <span className="text-dim">{SYS_STATE.modelHealth.baggingConf}</span>
+            </div>
           </div>
         </div>
 
-        {/* Global Regime State */}
-        <div className="glass-panel flex-col" style={{ gridColumn: 'span 2' }}>
-          <div className="flex-row" style={{ justifyContent: 'space-between' }}>
-            <h3 className="text-muted">MARKET REGIME FILTER</h3>
-            <span className={data.regime.vol_target_scalar >= 1.5 ? "text-pos" : "text-neg"} style={{ fontWeight: 700 }}>
-              {data.regime.status}
-            </span>
-          </div>
-
-          <div className="grid-2" style={{ marginTop: '1rem' }}>
-            <div className="glass-panel" style={{ background: 'rgba(0,0,0,0.3)', border: 'none' }}>
-              <p className="text-muted">ADX STR. (TREND)</p>
-              <h2 className="text-cyan" style={{ fontSize: '2.5rem' }}>{data.regime.adx_trend}</h2>
+        {/* MIDDLE COLUMN: REGIME & POSITIONS */}
+        <div className="flex-col">
+          <div className="panel">
+            <div className="panel-header flex-between">
+              <span>Composite Market Regime</span>
+              <span>VOL TARGET: {SYS_STATE.regime.targetVol * 100}%</span>
             </div>
-            <div className="glass-panel" style={{ background: 'rgba(0,0,0,0.3)', border: 'none' }}>
-              <p className="text-muted">LEVERAGE MULTIPLIER</p>
-              <h2 className="text-purple" style={{ fontSize: '2.5rem' }}>{data.regime.vol_target_scalar}x</h2>
+            <div className="grid-3" style={{ marginBottom: '1rem' }}>
+              <div>
+                <div className="metric-label">SMA-200 DISTANCE</div>
+                <div className="metric-val text-neg">{SYS_STATE.regime.sma200Dist}</div>
+              </div>
+              <div>
+                <div className="metric-label">ADX STR (TREND)</div>
+                <div className="metric-val text-dim">{SYS_STATE.regime.adxScore}</div>
+                <div style={{ fontSize: '0.7rem', color: '#666' }}>{SYS_STATE.regime.adxLabel}</div>
+              </div>
+              <div>
+                <div className="metric-label">COMPOSITE MULTIPLIER</div>
+                <div className="metric-val text-info">{(SYS_STATE.regime.scaler * SYS_STATE.regime.combinedScore).toFixed(2)}x</div>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="grid-2 animate-fade-in delay-2" style={{ marginTop: '2rem' }}>
-
-        {/* ML Outputs Panel */}
-        <div className="glass-panel flex-col">
-          <div className="flex-row" style={{ justifyContent: 'space-between' }}>
-            <h3>TARGET PORTFOLIO WEIGHTS</h3>
-            <span className="badge">LGBM + RF BAGGED</span>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Ticker</th>
-                <th>Current</th>
-                <th>Target</th>
-                <th>Delta</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.weights.map((row, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight: 600 }} className="text-cyan">{row.ticker}</td>
-                  <td className="text-muted">{row.currentWeight}</td>
-                  <td>{row.targetWeight}</td>
-                  <td className={row.delta.startsWith('+') ? "text-pos" : row.delta === "0%" ? "text-muted" : "text-neg"}>
-                    {row.delta}
-                  </td>
-                </tr>
+            <div className="metric-label">TRAILING 60-DAY REGIME STATE TRANSITIONS</div>
+            <div className="regime-strip">
+              {SYS_STATE.regime.stripHistory.map((s, i) => (
+                <div key={i} className={`strip-block strip-${s}`}></div>
               ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Execution Terminal */}
-        <div className="glass-panel flex-col" style={{ justifyContent: 'space-between' }}>
-          <div className="flex-col">
-            <div className="flex-row" style={{ justifyContent: 'space-between' }}>
-              <h3>LIVE EXECUTION TERMINAL</h3>
-              <span className="badge">ROUTING: ALPACA</span>
-            </div>
-
-            <div style={{
-              background: '#040609',
-              borderRadius: '8px',
-              padding: '1rem',
-              marginTop: '1rem',
-              height: '180px',
-              fontFamily: 'monospace',
-              fontSize: '0.85rem',
-              color: '#00E5FF',
-              overflowY: 'auto'
-            }}>
-              {executionLog.length === 0 ? (
-                <span style={{ color: '#444' }}>Awaiting execution command...</span>
-              ) : (
-                executionLog.map((log, i) => <div key={i} style={{ marginBottom: '0.5rem' }}>{log}</div>)
-              )}
             </div>
           </div>
 
-          <button
-            className="btn-primary"
-            style={{ marginTop: '1rem', position: 'relative', overflow: 'hidden' }}
-            onClick={handleExecute}
-            disabled={executing}
-          >
-            {executing ? (
-              <>
-                <div className="pulse-orb" style={{ background: 'white', border: 'none', boxShadow: 'none' }}></div>
-                TRANSMITTING TO BROKER...
-              </>
-            ) : "EXECUTE PORTFOLIO ROTATION"}
-          </button>
+          <div className="panel" style={{ flex: 1 }}>
+            <div className="panel-header">Active Alignments & Feature Attribution</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Target Exp</th>
+                  <th>Feature Drivers (Attribution)</th>
+                  <th>Drift Z-Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SYS_STATE.positions.map((p, i) => (
+                  <tr key={i}>
+                    <td className="text-white font-weight-700">{p.ticker}</td>
+                    <td className="text-info">{p.exp}</td>
+                    <td className="text-dim">{p.attr}</td>
+                    <td className={p.drift > 0 ? "text-pos" : "text-neg"}>{p.drift}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
+        {/* RIGHT COLUMN: OP EXECUTION */}
+        <div className="flex-col">
+          <div className="panel">
+            <div className="panel-header">Execution Subsystem</div>
+            <div className="flex-between">
+              <span className="text-dim">ROUTING</span>
+              <span className="text-white">{SYS_STATE.execution.routing}</span>
+            </div>
+            <div className="flex-between">
+              <span className="text-dim">SLIPPAGE MODEL</span>
+              <span className="text-dim">{SYS_STATE.execution.slippageModel}</span>
+            </div>
+            <div className="flex-between">
+              <span className="text-dim">MARGIN AVAIL / NAV</span>
+              <span className="text-white">{SYS_STATE.execution.cash} / {SYS_STATE.execution.nav}</span>
+            </div>
+          </div>
+
+          <div className="panel" style={{ flex: 1 }}>
+            <div className="panel-header">Execution Terminal</div>
+            <div className="log-terminal">
+              {log.length === 0 ? "IDLE. AWAITING TICKER DIFF..." : log.map((l, i) => <div key={i}>{l}</div>)}
+            </div>
+            <button
+              className="button-trigger"
+              onClick={handleRebalance}
+              disabled={executing}
+              style={{ marginTop: '1rem' }}
+            >
+              {executing ? "EXECUTING RECONCILIATION..." : "FORCE MANUAL RECONCILIATION"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
