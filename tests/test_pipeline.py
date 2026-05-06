@@ -93,4 +93,26 @@ print("\n--- OVERRIDDEN WEIGHTS ---")
 final_weights = risk_mgr.override_weights(weights, actions)
 print(f"  Final Weights: {final_weights}")
 
+print("\n--- PHASE 4: LIVE EXECUTION ---")
+import os
+import pandas as pd
+from execution.broker_live import AlpacaLiveExecution
+
+alpaca_api = os.getenv("ALPACA_API_KEY")
+alpaca_secret = os.getenv("ALPACA_SECRET_KEY")
+
+if alpaca_api and alpaca_secret:
+    print("  Initializing Alpaca broker connection...")
+    try:
+        broker = AlpacaLiveExecution(
+            api_keys={"API_KEY": alpaca_api, "SECRET_KEY": alpaca_secret},
+            is_paper=True
+        )
+        target_series = pd.Series(final_weights)
+        broker.execute_target_weights(target_series)
+    except Exception as e:
+        print(f"  ❌ Alpaca execution failed: {e}")
+else:
+    print("  ⚠️ Alpaca API keys not found in .env. Skipping live execution.")
+
 print("\n=== DONE ===")
