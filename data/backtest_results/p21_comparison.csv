@@ -1,5 +1,0 @@
-strategy,cagr,sharpe,sortino,calmar,max_dd,volatility,hit_rate
-P2.1 Full (ens+regime+volt),0.0998,1.3063,1.5589,1.0467,-0.0954,0.075,0.4373
-P2.1 Ens+regime (no vol-t),0.1758,1.3251,1.6029,1.0593,-0.166,0.1285,0.4373
-P2.1 Ens+volt (no regime),0.122,1.1205,1.3569,0.4799,-0.2541,0.1079,0.5544
-Equal-Weight 46,0.2073,1.1842,1.3832,0.5686,-0.3645,0.1717,0.5694

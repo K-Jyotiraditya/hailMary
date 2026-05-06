@@ -217,7 +217,7 @@ def run_daily_pipeline():
         weights = risk_mgr.override_weights(weights, actions)
         overrides = original_count - len(weights)
         if overrides > 0:
-            print(f"\n  ⚠️  Risk module removed {overrides} position(s) from target weights")
+            print(f"\n  [!] Risk module removed {overrides} position(s) from target weights")
 
         # Log risk actions
         risk_log = AgentOutput(
@@ -281,9 +281,9 @@ def run_daily_pipeline():
             target_series = pd.Series(weights)
             broker.execute_target_weights(target_series)
         except Exception as e:
-            print(f"  ❌ Alpaca execution failed: {e}")
+            print(f"  [ERROR] Alpaca execution failed: {e}")
     else:
-        print("  ⚠️ Alpaca API keys not found in .env. Skipping live execution.")
+        print("  [!] Alpaca API keys not found in .env. Skipping live execution.")
 
 
     return weights

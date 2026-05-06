@@ -1,0 +1,637 @@
+[
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.0,
+      "confidence": 0.5,
+      "key_theme": "No analysis available"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:24.948360"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 284.18,
+        "rsi_14": 67.3,
+        "sma20_dist_pct": 5.73,
+        "dist_to_20d_high_pct": 0.0,
+        "dist_to_20d_low_pct": 9.79,
+        "hv_10_annualized": 26.4,
+        "atr_20_pct": 1.65,
+        "breakout_threshold": 1.0,
+        "new_20d_high": true,
+        "new_20d_low": false
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:29.772021"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 50,
+      "key_strength": "",
+      "key_risk": ""
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:33.868605"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.0,
+      "confidence": 0.5,
+      "key_theme": "No analysis available"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:38.068202"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 411.38,
+        "rsi_14": 52.9,
+        "sma20_dist_pct": 0.44,
+        "dist_to_20d_high_pct": -4.98,
+        "dist_to_20d_low_pct": 10.92,
+        "hv_10_annualized": 35.7,
+        "atr_20_pct": 2.16,
+        "breakout_threshold": 1.08,
+        "new_20d_high": false,
+        "new_20d_low": false
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:41.856280"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 50,
+      "key_strength": "",
+      "key_risk": ""
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:46.464164"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.0,
+      "confidence": 0.5,
+      "key_theme": "No analysis available"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:50.868154"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 196.5,
+        "rsi_14": 50.8,
+        "sma20_dist_pct": -1.35,
+        "dist_to_20d_high_pct": -9.28,
+        "dist_to_20d_low_pct": 7.92,
+        "hv_10_annualized": 43.2,
+        "atr_20_pct": 2.22,
+        "breakout_threshold": 1.11,
+        "new_20d_high": false,
+        "new_20d_low": false
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:54.963619"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 50,
+      "key_strength": "",
+      "key_risk": ""
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:53:59.529480"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.0,
+      "confidence": 0.5,
+      "key_theme": "No analysis available"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:54:03.771587"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 273.55,
+        "rsi_14": 81.4,
+        "sma20_dist_pct": 7.99,
+        "dist_to_20d_high_pct": 0.0,
+        "dist_to_20d_low_pct": 23.64,
+        "hv_10_annualized": 21.0,
+        "atr_20_pct": 1.7,
+        "breakout_threshold": 1.0,
+        "new_20d_high": true,
+        "new_20d_low": false
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:54:07.319715"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 50,
+      "key_strength": "",
+      "key_risk": ""
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:54:11.616366"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.0,
+      "confidence": 0.5,
+      "key_theme": "No analysis available"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:54:15.953602"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 388.43,
+        "rsi_14": 81.6,
+        "sma20_dist_pct": 12.48,
+        "dist_to_20d_high_pct": 0.0,
+        "dist_to_20d_low_pct": 22.44,
+        "hv_10_annualized": 46.7,
+        "atr_20_pct": 2.42,
+        "breakout_threshold": 1.21,
+        "new_20d_high": true,
+        "new_20d_low": false
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:54:19.640886"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 50,
+      "key_strength": "",
+      "key_risk": ""
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:54:24.219945"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.0,
+      "confidence": 0.5,
+      "key_theme": "No analysis available"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:54:28.574934"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 604.96,
+        "rsi_14": 39.7,
+        "sma20_dist_pct": -6.99,
+        "dist_to_20d_high_pct": -12.14,
+        "dist_to_20d_low_pct": 0.0,
+        "hv_10_annualized": 48.6,
+        "atr_20_pct": 3.0,
+        "breakout_threshold": 1.5,
+        "new_20d_high": false,
+        "new_20d_low": true
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:54:32.035941"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.2,
+      "confidence": 0.6,
+      "key_theme": "Apple navigates supply chain challenges and explores diversified chip manufacturing options amidst a generally positive semiconductor industry backdrop."
+    },
+    "reasoning": "```json\n{\n  \"sentiment_score\": 0.2,\n  \"confidence\": 0.6,\n  \"key_theme\": \"Apple navigates supply chain challenges and explores diversified chip manufacturing options amidst a generally positive semiconductor industry backdrop.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:08.906503"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "up",
+      "confidence": 0.75,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 284.18,
+        "rsi_14": 67.3,
+        "sma20_dist_pct": 5.73,
+        "dist_to_20d_high_pct": 0.0,
+        "dist_to_20d_low_pct": 9.79,
+        "hv_10_annualized": 26.4,
+        "atr_20_pct": 1.65,
+        "breakout_threshold": 1.0,
+        "new_20d_high": true,
+        "new_20d_low": false
+      },
+      "reasoning": "AAPL is trading at a 20-day high with a bullish RSI and positive news sentiment regarding supply chain navigation and chip manufacturing diversification. | Gate: SOFT_PASS"
+    },
+    "reasoning": "```json\n{\n  \"direction\": \"up\",\n  \"confidence\": 0.75,\n  \"reasoning\": \"AAPL is trading at a 20-day high with a bullish RSI and positive news sentiment regarding supply chain navigation and chip manufacturing diversification.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:10.642915"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 85,
+      "key_strength": "Exceptional profitability and massive free cash flow generation.",
+      "key_risk": "Relatively high debt relative to equity for a technology company, though manageable given cash flow."
+    },
+    "reasoning": "```json\n{\n  \"health_score\": 85,\n  \"key_strength\": \"Exceptional profitability and massive free cash flow generation.\",\n  \"key_risk\": \"Relatively high debt relative to equity for a technology company, though manageable given cash flow.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:13.201671"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.1,
+      "confidence": 0.7,
+      "key_theme": "Microsoft is positioned within the broader AI narrative, facing both opportunities in AI adoption and challenges related to corporate integration and market fragmentation."
+    },
+    "reasoning": "```json\n{\n  \"sentiment_score\": 0.1,\n  \"confidence\": 0.7,\n  \"key_theme\": \"Microsoft is positioned within the broader AI narrative, facing both opportunities in AI adoption and challenges related to corporate integration and market fragmentation.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:15.557768"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.6,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 411.38,
+        "rsi_14": 52.9,
+        "sma20_dist_pct": 0.44,
+        "dist_to_20d_high_pct": -4.98,
+        "dist_to_20d_low_pct": 10.92,
+        "hv_10_annualized": 35.7,
+        "atr_20_pct": 2.16,
+        "breakout_threshold": 1.08,
+        "new_20d_high": false,
+        "new_20d_low": false
+      },
+      "reasoning": "Mixed technical signals with neutral RSI and proximity to SMAs, balanced by slightly bullish news sentiment around AI, suggesting a holding pattern. | Gate: SOFT_PASS"
+    },
+    "reasoning": "```json\n{\n  \"direction\": \"sideways\",\n  \"confidence\": 0.6,\n  \"reasoning\": \"Mixed technical signals with neutral RSI and proximity to SMAs, balanced by slightly bullish news sentiment around AI, suggesting a holding pattern.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:16.787045"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 92,
+      "key_strength": "Exceptional profit margins and strong free cash flow generation indicate robust operational efficiency and financial stability.",
+      "key_risk": "While debt levels are manageable, the forward P/E suggests investor optimism about future growth that needs to be consistently delivered."
+    },
+    "reasoning": "```json\n{\n  \"health_score\": 92,\n  \"key_strength\": \"Exceptional profit margins and strong free cash flow generation indicate robust operational efficiency and financial stability.\",\n  \"key_risk\": \"While debt levels are manageable, the forward P/E suggests investor optimism about future growth that needs to be consistently delivered.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:19.140399"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.7,
+      "confidence": 0.8,
+      "key_theme": "NVDA continues to be a key player in high-performance computing, particularly in AI, with significant partnerships and continued demand, despite broader market commentary."
+    },
+    "reasoning": "```json\n{\n  \"sentiment_score\": 0.7,\n  \"confidence\": 0.8,\n  \"key_theme\": \"NVDA continues to be a key player in high-performance computing, particularly in AI, with significant partnerships and continued demand, despite broader market commentary.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:21.598997"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "up",
+      "confidence": 0.75,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 196.5,
+        "rsi_14": 50.8,
+        "sma20_dist_pct": -1.35,
+        "dist_to_20d_high_pct": -9.28,
+        "dist_to_20d_low_pct": 7.92,
+        "hv_10_annualized": 43.2,
+        "atr_20_pct": 2.22,
+        "breakout_threshold": 1.11,
+        "new_20d_high": false,
+        "new_20d_low": false
+      },
+      "reasoning": "Strong bullish news sentiment in AI and HPC, coupled with RSI near neutral and price close to the 20-day SMA, suggests potential upside with recent volatility being absorbed. | Gate: SOFT_PASS"
+    },
+    "reasoning": "```json\n{\n  \"direction\": \"up\",\n  \"confidence\": 0.75,\n  \"reasoning\": \"Strong bullish news sentiment in AI and HPC, coupled with RSI near neutral and price close to the 20-day SMA, suggests potential upside with recent volatility being absorbed.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:22.956043"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 70,
+      "key_strength": "Significant future earnings potential indicated by a lower forward P/E compared to trailing P/E.",
+      "key_risk": "Lack of granular financial data (EPS, revenue growth, profit margin, debt/equity, free cash flow) prevents a comprehensive health assessment."
+    },
+    "reasoning": "```json\n{\n  \"health_score\": 70,\n  \"key_strength\": \"Significant future earnings potential indicated by a lower forward P/E compared to trailing P/E.\",\n  \"key_risk\": \"Lack of granular financial data (EPS, revenue growth, profit margin, debt/equity, free cash flow) prevents a comprehensive health assessment.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:24.848914"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.1,
+      "confidence": 0.6,
+      "key_theme": "Amazon's enhanced price transparency is generally positive for consumers, though some analysts question its growth potential relative to peers."
+    },
+    "reasoning": "```json\n{\n  \"sentiment_score\": 0.1,\n  \"confidence\": 0.6,\n  \"key_theme\": \"Amazon's enhanced price transparency is generally positive for consumers, though some analysts question its growth potential relative to peers.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:27.129634"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "up",
+      "confidence": 0.75,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 273.55,
+        "rsi_14": 81.4,
+        "sma20_dist_pct": 7.99,
+        "dist_to_20d_high_pct": 0.0,
+        "dist_to_20d_low_pct": 23.64,
+        "hv_10_annualized": 21.0,
+        "atr_20_pct": 1.7,
+        "breakout_threshold": 1.0,
+        "new_20d_high": true,
+        "new_20d_low": false
+      },
+      "reasoning": "Strong bullish technical signals (overbought RSI, new 20-day high, distance to 20-day high) outweigh slightly cautious news sentiment, suggesting continued upward momentum. | Gate: SOFT_PASS"
+    },
+    "reasoning": "```json\n{\n  \"direction\": \"up\",\n  \"confidence\": 0.75,\n  \"reasoning\": \"Strong bullish technical signals (overbought RSI, new 20-day high, distance to 20-day high) outweigh slightly cautious news sentiment, suggesting continued upward momentum.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:28.561537"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 50,
+      "key_strength": "",
+      "key_risk": ""
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:56:33.170585"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.75,
+      "confidence": 0.85,
+      "key_theme": "Strong positive outlook driven by a massive cloud and AI infrastructure deal with Anthropic."
+    },
+    "reasoning": "```json\n{\n  \"sentiment_score\": 0.75,\n  \"confidence\": 0.85,\n  \"key_theme\": \"Strong positive outlook driven by a massive cloud and AI infrastructure deal with Anthropic.\"\n}\n```",
+    "timestamp": "2026-05-06T13:56:34.975365"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 388.43,
+        "rsi_14": 81.6,
+        "sma20_dist_pct": 12.48,
+        "dist_to_20d_high_pct": 0.0,
+        "dist_to_20d_low_pct": 22.44,
+        "hv_10_annualized": 46.7,
+        "atr_20_pct": 2.42,
+        "breakout_threshold": 1.21,
+        "new_20d_high": true,
+        "new_20d_low": false
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:56:38.597729"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 50,
+      "key_strength": "",
+      "key_risk": ""
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:56:43.104112"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.0,
+      "confidence": 0.5,
+      "key_theme": "No analysis available"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:56:47.100762"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 604.96,
+        "rsi_14": 39.7,
+        "sma20_dist_pct": -6.99,
+        "dist_to_20d_high_pct": -12.14,
+        "dist_to_20d_low_pct": 0.0,
+        "hv_10_annualized": 48.6,
+        "atr_20_pct": 3.0,
+        "breakout_threshold": 1.5,
+        "new_20d_high": false,
+        "new_20d_low": true
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:56:50.886535"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 50,
+      "key_strength": "",
+      "key_risk": ""
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:56:55.755932"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.0,
+      "confidence": 0.5,
+      "key_theme": "No analysis available"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:56:59.895476"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.5,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 389.37,
+        "rsi_14": 55.2,
+        "sma20_dist_pct": 3.36,
+        "dist_to_20d_high_pct": -2.81,
+        "dist_to_20d_low_pct": 13.44,
+        "hv_10_annualized": 27.6,
+        "atr_20_pct": 2.35,
+        "breakout_threshold": 1.17,
+        "new_20d_high": false,
+        "new_20d_low": false
+      },
+      "reasoning": " | Gate: SOFT_PASS"
+    },
+    "reasoning": "",
+    "timestamp": "2026-05-06T13:57:03.581753"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 45,
+      "key_strength": "Positive Free Cash Flow generation indicates operational cash generation capability.",
+      "key_risk": "Extremely high P/E ratios suggest significant valuation concerns and dependence on future growth."
+    },
+    "reasoning": "```json\n{\n  \"health_score\": 45,\n  \"key_strength\": \"Positive Free Cash Flow generation indicates operational cash generation capability.\",\n  \"key_risk\": \"Extremely high P/E ratios suggest significant valuation concerns and dependence on future growth.\"\n}\n```",
+    "timestamp": "2026-05-06T13:57:06.559595"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.1,
+      "confidence": 0.6,
+      "key_theme": "JPM's involvement in financing and credit facilities for various companies, with a slight positive undertone from its role in credit expansion."
+    },
+    "reasoning": "```json\n{\n  \"sentiment_score\": 0.1,\n  \"confidence\": 0.6,\n  \"key_theme\": \"JPM's involvement in financing and credit facilities for various companies, with a slight positive undertone from its role in credit expansion.\"\n}\n```",
+    "timestamp": "2026-05-06T13:57:09.233013"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "sideways",
+      "confidence": 0.55,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 309.4,
+        "rsi_14": 53.6,
+        "sma20_dist_pct": -0.47,
+        "dist_to_20d_high_pct": -2.39,
+        "dist_to_20d_low_pct": 1.13,
+        "hv_10_annualized": 14.4,
+        "atr_20_pct": 1.31,
+        "breakout_threshold": 1.0,
+        "new_20d_high": false,
+        "new_20d_low": false
+      },
+      "reasoning": "Mixed technical signals with neutral news sentiment suggest limited directional movement. | Gate: SOFT_PASS"
+    },
+    "reasoning": "```json\n{\n  \"direction\": \"sideways\",\n  \"confidence\": 0.55,\n  \"reasoning\": \"Mixed technical signals with neutral news sentiment suggest limited directional movement.\"\n}\n```",
+    "timestamp": "2026-05-06T13:57:10.853570"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 85,
+      "key_strength": "Strong profitability and a reasonable valuation indicate financial health.",
+      "key_risk": "Lack of disclosed Debt/Equity and Free Cash Flow limits a complete assessment of leverage and liquidity."
+    },
+    "reasoning": "```json\n{\n  \"health_score\": 85,\n  \"key_strength\": \"Strong profitability and a reasonable valuation indicate financial health.\",\n  \"key_risk\": \"Lack of disclosed Debt/Equity and Free Cash Flow limits a complete assessment of leverage and liquidity.\"\n}\n```",
+    "timestamp": "2026-05-06T13:57:13.415680"
+  },
+  {
+    "agent": "News-Sentiment",
+    "data": {
+      "sentiment_score": 0.2,
+      "confidence": 0.7,
+      "key_theme": "Visa is exploring stablecoin initiatives and actively engaging with investors, though broader crypto market sentiment presents a mixed backdrop."
+    },
+    "reasoning": "```json\n{\n  \"sentiment_score\": 0.2,\n  \"confidence\": 0.7,\n  \"key_theme\": \"Visa is exploring stablecoin initiatives and actively engaging with investors, though broader crypto market sentiment presents a mixed backdrop.\"\n}\n```",
+    "timestamp": "2026-05-06T13:57:15.052841"
+  },
+  {
+    "agent": "Technical-Forecaster",
+    "data": {
+      "direction": "up",
+      "confidence": 0.65,
+      "gate": "SOFT_PASS",
+      "indicators": {
+        "price": 322.03,
+        "rsi_14": 57.0,
+        "sma20_dist_pct": 2.16,
+        "dist_to_20d_high_pct": -3.83,
+        "dist_to_20d_low_pct": 5.81,
+        "hv_10_annualized": 43.4,
+        "atr_20_pct": 2.07,
+        "breakout_threshold": 1.03,
+        "new_20d_high": false,
+        "new_20d_low": false
+      },
+      "reasoning": "Bullish news sentiment regarding stablecoin initiatives outweighs neutral to slightly positive technical indicators, suggesting potential upside. | Gate: SOFT_PASS"
+    },
+    "reasoning": "```json\n{\n  \"direction\": \"up\",\n  \"confidence\": 0.65,\n  \"reasoning\": \"Bullish news sentiment regarding stablecoin initiatives outweighs neutral to slightly positive technical indicators, suggesting potential upside.\"\n}\n```",
+    "timestamp": "2026-05-06T13:57:16.383301"
+  },
+  {
+    "agent": "Fundamentals",
+    "data": {
+      "health_score": 75,
+      "key_strength": "Exceptional profit margins and robust free cash flow generation.",
+      "key_risk": "Elevated debt-to-equity ratio raises potential leverage concerns."
+    },
+    "reasoning": "```json\n{\n  \"health_score\": 75,\n  \"key_strength\": \"Exceptional profit margins and robust free cash flow generation.\",\n  \"key_risk\": \"Elevated debt-to-equity ratio raises potential leverage concerns.\"\n}\n```",
+    "timestamp": "2026-05-06T13:57:19.454298"
+  }
+]

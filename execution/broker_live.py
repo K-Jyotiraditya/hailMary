@@ -82,7 +82,7 @@ class AlpacaLiveExecution(BaseBrokerExecution):
                 time_in_force=TimeInForce.DAY
             )
             self.client.submit_order(order_data=req)
-            print(f"   ✓ Order Transmitted to Server")
+            print(f"   [OK] Order Transmitted to Server")
         except Exception as e:
             print(f"   X Failed to transmit order: {e}")
 

@@ -227,11 +227,11 @@ class RiskManager:
         holds = [a for a in actions if a.action == "HOLD"]
 
         if sells:
-            lines.append(f"  ⚠️  {len(sells)} RISK OVERRIDE(S):")
+            lines.append(f"  [!] {len(sells)} RISK OVERRIDE(S):")
             for a in sells:
                 lines.append(f"    [{a.action}] {a.ticker}: {a.reason}")
         if holds:
-            lines.append(f"  ✓  {len(holds)} position(s) within risk bounds")
+            lines.append(f"  [OK] {len(holds)} position(s) within risk bounds")
             for a in holds:
                 lines.append(f"    {a.ticker}: {a.reason}")
 
