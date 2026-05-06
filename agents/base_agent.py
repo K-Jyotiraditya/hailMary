@@ -18,7 +18,7 @@ from google import genai
 
 # Initialize Gemini client once
 _client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL = "gemini-2.5-flash-lite"
+MODEL = "gemma-4-26b-a4b-it"
 
 
 class AgentOutput:
