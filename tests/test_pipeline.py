@@ -9,6 +9,7 @@ from agents.technical_forecaster import TechnicalForecasterAgent
 from agents.fundamentals_agent import FundamentalsAgent
 from agents.risk_style import RiskStyleAgent
 from agents.portfolio_decision import PortfolioDecisionAgent
+from risk.risk_manager import RiskManager
 
 TEST_TICKERS = ["AAPL", "NVDA", "JPM"]
 
@@ -70,7 +71,26 @@ weights = p.data.get("weights", {})
 cash = p.data.get("cash_reserve", 1.0)
 rationale = p.data.get("rationale", "")
 
-print(f"  Weights: {weights}")
+print(f"\n  Weights: {weights}")
 print(f"  Cash: {cash:.1%}")
 print(f"  Rationale: {rationale}")
+
+print("\n--- PHASE 3: RISK MANAGEMENT ---")
+risk_mgr = RiskManager(style=style)
+# Simulate dummy positions for the risk test
+from risk.risk_manager import PositionRisk
+
+positions = [
+    PositionRisk(ticker="AAPL", entry_price=150.0, current_price=140.0, shares=10.0, entry_date="2026-05-01", stop_loss_pct=3.0, take_profit_pct=5.0), # Will hit stop loss
+    PositionRisk(ticker="NVDA", entry_price=100.0, current_price=120.0, shares=5.0, entry_date="2026-05-01", stop_loss_pct=5.0, take_profit_pct=10.0), # Will hit take profit
+    PositionRisk(ticker="JPM", entry_price=100.0, current_price=101.0, shares=10.0, entry_date="2026-05-01", stop_loss_pct=2.0, take_profit_pct=4.0), # Hold
+]
+
+actions = risk_mgr.check_portfolio(positions, portfolio_equity=50000, starting_equity=50000)
+print(risk_mgr.summary(actions))
+
+print("\n--- OVERRIDDEN WEIGHTS ---")
+final_weights = risk_mgr.override_weights(weights, actions)
+print(f"  Final Weights: {final_weights}")
+
 print("\n=== DONE ===")

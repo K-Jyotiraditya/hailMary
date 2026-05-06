@@ -4,8 +4,9 @@ Daily Orchestrator — Runs the full TradingGroup V2 pipeline.
 Sequence:
   1. For each stock: News → Technical → Fundamentals (per-stock agents)
   2. Once: Risk-Style → Portfolio-Decision (portfolio-level agents)
-  3. Log all agent outputs
-  4. Execute via Alpaca (if connected)
+  3. Risk Management: check existing positions, override weights if needed
+  4. Log all agent outputs
+  5. Execute via Alpaca (if connected)
 """
 import sys
 import json
@@ -22,7 +23,8 @@ from agents.technical_forecaster import TechnicalForecasterAgent
 from agents.fundamentals_agent import FundamentalsAgent
 from agents.risk_style import RiskStyleAgent
 from agents.portfolio_decision import PortfolioDecisionAgent
-from agents.base_agent import log_agent_output
+from agents.base_agent import log_agent_output, AgentOutput
+from risk.risk_manager import RiskManager
 
 
 def load_reflection(log_dir: str = "data/agent_logs", lookback_days: int = 5) -> str:
@@ -55,6 +57,51 @@ def load_reflection(log_dir: str = "data/agent_logs", lookback_days: int = 5) ->
         return "No previous portfolio decisions found."
 
     return "Recent decisions:\n" + "\n".join(summary_lines)
+
+
+def load_current_positions() -> dict:
+    """Load simulated positions from the latest execution log."""
+    state_path = Path("data/portfolio_state.json")
+    if state_path.exists():
+        try:
+            with open(state_path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"positions": {}, "equity": 100000, "starting_equity": 100000}
+
+
+def save_portfolio_state(weights: dict, equity: float = 100000):
+    """Save the portfolio state for next-day risk monitoring."""
+    import yfinance as yf
+
+    positions = {}
+    for ticker, w in weights.items():
+        if w <= 0:
+            continue
+        try:
+            data = yf.download(ticker, period="1d", progress=False, multi_level_index=False)
+            if not data.empty:
+                price = float(data["Close"].iloc[-1])
+                dollar_alloc = equity * w
+                shares = dollar_alloc / price
+                positions[ticker] = {
+                    "entry_price": price,
+                    "shares": round(shares, 2),
+                    "entry_date": datetime.now().strftime("%Y-%m-%d"),
+                }
+        except Exception:
+            continue
+
+    state = {
+        "positions": positions,
+        "equity": equity,
+        "starting_equity": equity,
+        "last_update": datetime.now().isoformat(),
+    }
+    Path("data").mkdir(exist_ok=True)
+    with open("data/portfolio_state.json", "w") as f:
+        json.dump(state, f, indent=2)
 
 
 def run_daily_pipeline():
@@ -134,9 +181,64 @@ def run_daily_pipeline():
     cash = portfolio_out.data.get("cash_reserve", 1.0)
     rationale = portfolio_out.data.get("rationale", "")
 
+    # ── Phase 3: Risk Management ──
+    print(f"\n[Phase 3] Risk management checks...\n")
+    risk_mgr = RiskManager(style=style)
+    state = load_current_positions()
+
+    if state["positions"]:
+        import yfinance as yf
+        risk_positions = []
+        for ticker, pos_data in state["positions"].items():
+            try:
+                data = yf.download(ticker, period="1d", progress=False, multi_level_index=False)
+                current_price = float(data["Close"].iloc[-1]) if not data.empty else pos_data["entry_price"]
+            except Exception:
+                current_price = pos_data["entry_price"]
+
+            risk_pos = risk_mgr.assess_position(
+                ticker=ticker,
+                entry_price=pos_data["entry_price"],
+                current_price=current_price,
+                shares=pos_data["shares"],
+                entry_date=pos_data.get("entry_date", ""),
+            )
+            risk_positions.append(risk_pos)
+
+        actions = risk_mgr.check_portfolio(
+            risk_positions,
+            portfolio_equity=state["equity"],
+            starting_equity=state["starting_equity"],
+        )
+        print(risk_mgr.summary(actions))
+
+        # Override weights if risk module flags positions
+        original_count = len(weights)
+        weights = risk_mgr.override_weights(weights, actions)
+        overrides = original_count - len(weights)
+        if overrides > 0:
+            print(f"\n  ⚠️  Risk module removed {overrides} position(s) from target weights")
+
+        # Log risk actions
+        risk_log = AgentOutput(
+            agent_name="Risk-Management",
+            data={"actions": [{"ticker": a.ticker, "action": a.action, "pnl": a.pnl_pct} for a in actions]},
+            reasoning=risk_mgr.summary(actions),
+        )
+        log_agent_output(risk_log)
+    else:
+        print("  No existing positions to monitor. First run — all clear.")
+
+        # Show what thresholds WOULD be for the proposed portfolio
+        if weights:
+            print(f"\n  Proposed position thresholds ({style.upper()} mode):")
+            for ticker in list(weights.keys())[:5]:
+                sl, tp = risk_mgr.compute_thresholds(ticker)
+                print(f"    {ticker}: SL=-{sl:.1f}% | TP=+{tp:.1f}%")
+
     # ── Output ──
     print(f"\n{'=' * 70}")
-    print(f"  TARGET PORTFOLIO — {datetime.now().strftime('%Y-%m-%d')}")
+    print(f"  FINAL TARGET PORTFOLIO — {datetime.now().strftime('%Y-%m-%d')}")
     print(f"  Style: {style.upper()} | Cash Reserve: {cash:.1%}")
     print(f"{'=' * 70}")
 
@@ -154,6 +256,11 @@ def run_daily_pipeline():
 
     print(f"\n  Rationale: {rationale}")
     print(f"{'=' * 70}\n")
+
+    # Save state for tomorrow's risk monitoring
+    if weights:
+        save_portfolio_state(weights)
+        print("  [STATE] Portfolio state saved for next-day risk monitoring.\n")
 
     return weights
 
