@@ -8,7 +8,9 @@ weight allocation respecting sector caps and position limits.
 import json
 from typing import Dict, Any, List
 from agents.base_agent import BaseAgent
-from config.watchlist import MAX_SINGLE_POSITION, MAX_SECTOR_WEIGHT, MAX_STOCKS_HELD, SECTORS
+from config.watchlist import WATCHLIST, MAX_SINGLE_POSITION, MAX_SECTOR_WEIGHT, MAX_STOCKS_HELD, SECTORS
+
+_WATCHLIST_SET = set(WATCHLIST)
 
 
 class PortfolioDecisionAgent(BaseAgent):
@@ -70,7 +72,14 @@ Output ONLY a JSON object with target weights (0 for stocks to skip, omit stocks
         # Enforce constraints
         cleaned = {}
         for ticker, w in weights.items():
-            w = max(0.0, min(float(w), MAX_SINGLE_POSITION))
+            # Reject hallucinated tickers not in our watchlist
+            if ticker not in _WATCHLIST_SET:
+                continue
+            try:
+                w = float(w)
+            except (ValueError, TypeError):
+                continue
+            w = max(0.0, min(w, MAX_SINGLE_POSITION))
             if w > 0.005:  # Ignore negligible weights
                 cleaned[ticker] = round(w, 4)
 

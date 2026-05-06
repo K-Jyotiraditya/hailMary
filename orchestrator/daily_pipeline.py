@@ -182,39 +182,70 @@ def run_daily_pipeline():
                 "fundamentals": {"health_score": 50, "key_strength": "", "key_risk": ""},
             }
 
+    # Load portfolio state once — shared by Phase 2 and Phase 3
+    state = load_current_positions()
+    equity = state.get("equity", 100000)
+
+    # Derive current holdings as weight fractions from entry prices (best available estimate)
+    current_holdings_pct: dict = {}
+    cash_pct = 100.0
+    if state["positions"]:
+        total_invested = sum(
+            p["entry_price"] * p["shares"] for p in state["positions"].values()
+        )
+        cash_pct = max(0.0, round((equity - total_invested) / equity * 100, 1))
+        current_holdings_pct = {
+            ticker: round(p["entry_price"] * p["shares"] / equity, 4)
+            for ticker, p in state["positions"].items()
+        }
+
     # ── Phase 2: Portfolio-Level Decisions ──
     print(f"\n[Phase 2] Portfolio-level intelligence...\n")
 
-    # Risk Style
-    style_out = style_agent.run({
-        "equity": 100000,
-        "pnl_history": [],
-        "current_drawdown_pct": 0,
-        "recent_win_rate": 0.5,
-    })
-    log_agent_output(style_out)
-    style = style_out.data.get("style", "balanced")
-    print(f"  Style: {style.upper()} (conf={style_out.data.get('confidence', 0):.1f})")
+    weights = {}
+    cash = 1.0
+    rationale = ""
+    style = "balanced"
 
-    # Portfolio Decision
-    reflection = load_reflection()
-    portfolio_out = portfolio_agent.run({
-        "stock_analyses": stock_analyses,
-        "current_holdings": {},
-        "cash_pct": 100.0,
-        "trading_style": style,
-        "reflection_text": reflection,
-    })
-    log_agent_output(portfolio_out)
+    try:
+        # Risk Style
+        style_out = style_agent.run({
+            "equity": equity,
+            "pnl_history": [],
+            "current_drawdown_pct": 0,
+            "recent_win_rate": 0.5,
+        })
+        log_agent_output(style_out)
+        style = style_out.data.get("style", "balanced")
+        print(f"  Style: {style.upper()} (conf={style_out.data.get('confidence', 0):.1f})")
 
-    weights = portfolio_out.data.get("weights", {})
-    cash = portfolio_out.data.get("cash_reserve", 1.0)
-    rationale = portfolio_out.data.get("rationale", "")
+        # Portfolio Decision
+        reflection = load_reflection()
+        portfolio_out = portfolio_agent.run({
+            "stock_analyses": stock_analyses,
+            "current_holdings": current_holdings_pct,
+            "cash_pct": cash_pct,
+            "trading_style": style,
+            "reflection_text": reflection,
+        })
+        log_agent_output(portfolio_out)
+
+        weights = portfolio_out.data.get("weights", {})
+        cash = portfolio_out.data.get("cash_reserve", 1.0)
+        rationale = portfolio_out.data.get("rationale", "")
+
+    except Exception as exc:
+        print(f"  [ERROR] Phase 2 failed: {exc} — defaulting to all-cash")
+        err_out = AgentOutput(
+            agent_name="Pipeline-Error",
+            data={"phase": 2, "error": str(exc)},
+            reasoning="Unhandled exception in Phase 2",
+        )
+        log_agent_output(err_out)
 
     # ── Phase 3: Risk Management ──
     print(f"\n[Phase 3] Risk management checks...\n")
     risk_mgr = RiskManager(style=style)
-    state = load_current_positions()
 
     if state["positions"]:
         import yfinance as yf
