@@ -1,0 +1,4 @@
+strategy,cagr,sharpe,sortino,calmar,max_dd,volatility,hit_rate
+Phase 2 (regime),0.1757,1.3298,1.6334,0.984,-0.1785,0.1279,0.4378
+Phase 2 (no regime),0.2341,1.2613,1.6134,0.6668,-0.351,0.1797,0.5589
+Equal-Weight 46,0.2073,1.1842,1.3832,0.5686,-0.3645,0.1717,0.5694

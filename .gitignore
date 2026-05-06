@@ -1,0 +1,11 @@
+venv/
+node_modules/
+.env
+__pycache__/
+*.pkl
+*.parquet
+data/raw/
+data/processed/
+.DS_Store
+dist/
+dashboard/node_modules/

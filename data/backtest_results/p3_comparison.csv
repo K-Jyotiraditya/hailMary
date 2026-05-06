@@ -1,0 +1,4 @@
+strategy,cagr,sharpe,sortino,calmar,max_dd,volatility,hit_rate
+P3 (sector-neutral + regime),0.172,1.2873,1.5636,1.1001,-0.1563,0.1299,0.4301
+P3 (no sector cap),0.1696,1.2739,1.5432,1.0627,-0.1596,0.1296,0.4301
+Equal-Weight 46,0.2073,1.1842,1.3832,0.5686,-0.3645,0.1717,0.5694

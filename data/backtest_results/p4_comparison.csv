@@ -1,0 +1,6 @@
+strategy,cagr,sharpe,sortino,calmar,max_dd,volatility,hit_rate
+Phase 4 OPTIMAL,0.1554,1.214,1.5389,0.7778,-0.1998,0.1255,0.419
+Phase 1 (per-stock),0.1767,0.9014,1.1629,0.4144,-0.4264,0.2038,0.529
+Phase 2 (cross-sectional),0.1757,1.3298,1.6334,0.984,-0.1785,0.1279,0.4378
+Equal-Weight 46,0.2073,1.1842,1.3832,0.5686,-0.3645,0.1717,0.5694
+Phase 3 (bagged + sector-neutral),0.1738,1.3265,1.612,1.056,-0.1646,0.1269,0.4323

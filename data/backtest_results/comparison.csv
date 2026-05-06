@@ -1,0 +1,4 @@
+strategy,cagr,sharpe,sortino,calmar,max_dd,volatility,hit_rate
+ML Strategy,0.3347,1.6998,2.1979,1.1202,-0.2988,0.1794,0.5484
+Equal-Weight 6,0.1501,0.9093,1.1062,0.367,-0.4089,0.1698,0.5494
+Equal-Weight 18,0.1774,1.0715,1.2749,0.4634,-0.3828,0.1653,0.5602
