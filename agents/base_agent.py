@@ -7,6 +7,7 @@ retry logic, and CoT trace logging.
 import os
 import json
 import time
+import requests
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -14,11 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from google import genai
-
-# Initialize Gemini client once
-_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL = "gemma-4-26b-a4b-it"
+MODEL = "gemma4:e2b"
 
 
 class AgentOutput:
@@ -47,7 +44,6 @@ class BaseAgent:
     MAX_RETRIES = 3
 
     def __init__(self):
-        self.client = _client
         self.model = MODEL
 
     def build_prompt(self, context: Dict[str, Any]) -> str:
@@ -59,20 +55,23 @@ class BaseAgent:
         raise NotImplementedError
 
     def call_llm(self, prompt: str) -> str:
-        """Call Gemini with retry logic and rate-limit throttle."""
+        """Call local Ollama Gemma 4 with retry logic."""
         for attempt in range(self.MAX_RETRIES):
             try:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                )
-                time.sleep(10)  # Throttle: 6 calls/min stays safely under 10 RPM
-                return response.text
+                url = "http://localhost:11434/api/generate"
+                payload = {
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+                response = requests.post(url, json=payload, timeout=180)
+                response.raise_for_status()
+                return response.json().get("response", "")
             except Exception as e:
                 if attempt == self.MAX_RETRIES - 1:
-                    print(f"[{self.NAME}] LLM call failed after {self.MAX_RETRIES} attempts: {e}")
+                    print(f"[{self.NAME}] Local LLM call failed after {self.MAX_RETRIES} attempts: {e}")
                     return ""
-                wait = 15 * (attempt + 1)  # 15s, 30s for rate-limit recovery
+                wait = 2 * (attempt + 1)
                 print(f"[{self.NAME}] Retry {attempt+1}/{self.MAX_RETRIES} in {wait}s...")
                 time.sleep(wait)
         return ""
