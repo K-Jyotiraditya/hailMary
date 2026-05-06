@@ -1,283 +1,563 @@
-import React, { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './index.css';
 
-// Synthetic structural data mirroring live algorithm state
-const SYS_STATE = {
-  modelHealth: {
-    backtestIC: 0.0434,
-    liveIC: 0.0392,
-    featureDrift: 0.012,
-    nextRetrain: "14 Days",
-    lastRetrain: "2026-04-20 23:00Z",
-    pbo: 0.91,
-    dsr: 1.84,
-    baggingConf: "±1.22%"
-  },
-  regime: {
-    adxScore: 18.4,
-    adxLabel: "Weak Trend → Limiting Base Exposure",
-    sma200Dist: "-1.5%",
-    combinedScore: 0.35,
-    realizedVol: 0.142,
-    targetVol: 0.12,
-    scaler: 0.84,
-    stripHistory: Array.from({ length: 60 }, (_, i) => Math.random() > 0.8 ? "danger" : Math.random() > 0.4 ? "warning" : "safe")
-  },
-  performance: {
-    maxDD: "-3.41%",
-    currentDD: "-0.84%",
-    rollingRankIC: "0.045", // Replaced Hit Rate
-    sharpe60d: 1.12,
-    mtd: "+1.4%",
-    ytd: "+8.2%"
-  },
-  positions: [
-    { ticker: "AAPL", exp: "15%", riskAttr: "4.2%", attr: "vol_60(-1.2) mom_20(+2.1)", drift: 0.01 },
-    { ticker: "MSFT", exp: "10%", riskAttr: "2.1%", attr: "mean_abs_ic(+1.5) MACD(+0.8)", drift: 0.02 },
-    { ticker: "NVDA", exp: "12%", riskAttr: "8.5%", attr: "dollar_vol(+2.4) vs_vwap(+1.1)", drift: -0.01 }
-  ],
-  sectors: [
-    { name: "Information Technology", val: "37%" },
-    { name: "Financials", val: "15%" },
-    { name: "Healthcare", val: "12%" }
-  ],
-  execution: {
-    routing: "ALPACA (US EQ)",
-    cashPct: "63%", // Replaced Margin Avail
-    slippageModel: "ADV Square-root (Est. 2bps)",
-    lastFetch: "2026-05-06T15:55:01Z"
-  },
-  compliance: {
-    singleNameMax: { limit: "15%", current: "15%", pass: true },
-    sectorCap: { limit: "35%", current: "37%", pass: false }, // Intentional warning
-    grossExp: { limit: "100%", current: "37%", pass: true }
+const API = 'http://localhost:8000';
+const POLL_MS = 30_000;
+
+// ── Data hooks ────────────────────────────────────────────────────────────
+
+function useStatus(date) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [lastFetch, setLastFetch] = useState(null);
+
+  const fetchData = useCallback(async () => {
+    const url = date ? `${API}/api/logs/${date}` : `${API}/api/status`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setData(await res.json());
+      setError(null);
+      setLastFetch(new Date().toISOString());
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [date]);
+
+  useEffect(() => {
+    fetchData();
+    const id = setInterval(fetchData, POLL_MS);
+    return () => clearInterval(id);
+  }, [fetchData]);
+
+  return { data, error, loading, lastFetch, refresh: fetchData };
+}
+
+function useDates() {
+  const [dates, setDates] = useState([]);
+  useEffect(() => {
+    fetch(`${API}/api/dates`).then(r => r.json()).then(setDates).catch(() => {});
+  }, []);
+  return dates;
+}
+
+// ── Formatters ────────────────────────────────────────────────────────────
+
+const fmtPct = v => v != null ? `${(v * 100).toFixed(1)}%` : '—';
+const fmtTs = ts => ts ? ts.replace('T', ' ').slice(0, 19) : '—';
+
+function fmtSentiment(v) {
+  if (v == null) return { text: '—', cls: 'text-dim' };
+  if (v > 0.1)  return { text: `+${v.toFixed(2)}`, cls: 'text-pos' };
+  if (v < -0.1) return { text: v.toFixed(2),        cls: 'text-neg' };
+  return { text: v.toFixed(2), cls: 'text-dim' };
+}
+
+function fmtDirection(d) {
+  if (!d || d === 'sideways') return { text: 'FLAT', cls: 'text-dim' };
+  if (d === 'up')   return { text: 'UP',   cls: 'text-pos' };
+  if (d === 'down') return { text: 'DOWN', cls: 'text-neg' };
+  return { text: d.toUpperCase(), cls: 'text-dim' };
+}
+
+function fmtHealth(h) {
+  if (h == null) return { text: '—', cls: 'text-dim' };
+  if (h >= 65)   return { text: String(h), cls: 'text-pos' };
+  if (h <= 35)   return { text: String(h), cls: 'text-neg' };
+  return { text: String(h), cls: 'text-neutral' };
+}
+
+function phaseTag(ok) {
+  return ok
+    ? <span className="text-pos">COMPLETE</span>
+    : <span className="text-neg">NOT RUN</span>;
+}
+
+// Derive a composite signal score for ranking Phase-1-only results
+function compositeScore(d) {
+  const sent = d.sentiment?.sentiment_score ?? 0;
+  const dir  = d.technical?.direction === 'up' ? 1 : d.technical?.direction === 'down' ? -1 : 0;
+  const hlth = ((d.fundamentals?.health_score ?? 50) - 50) / 100;
+  return sent + dir + hlth;
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────
+
+function PipelineStatus({ run }) {
+  return (
+    <div className="panel">
+      <div className="panel-header">Pipeline Run Status — {run.date ?? '—'}</div>
+
+      <div className="flex-between">
+        <span className="text-dim">PHASE 1 — Per-Stock Agents</span>
+        {phaseTag(run.phase1_complete)}
+      </div>
+      <div className="flex-between" style={{ paddingLeft: '1rem', fontSize: '0.72rem' }}>
+        <span className="text-dim">Stocks complete</span>
+        <span className={run.stocks_complete === run.stocks_total ? 'text-pos' : 'text-neutral'}>
+          {run.stocks_complete} / {run.stocks_total}
+        </span>
+      </div>
+
+      <div className="flex-between">
+        <span className="text-dim">PHASE 2 — Portfolio Decision</span>
+        {phaseTag(run.phase2_complete)}
+      </div>
+
+      <div className="flex-between">
+        <span className="text-dim">PHASE 3 — Risk Management</span>
+        {phaseTag(run.phase3_complete)}
+      </div>
+
+      <div className="flex-between" style={{ marginTop: '0.25rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.5rem' }}>
+        <span className="text-dim">LOG ENTRIES</span>
+        <span className="text-white">{run.total_entries}</span>
+      </div>
+      <div className="flex-between">
+        <span className="text-dim">LAST ENTRY</span>
+        <span className="text-dim" style={{ fontSize: '0.7rem' }}>{fmtTs(run.last_updated)}</span>
+      </div>
+    </div>
+  );
+}
+
+function StockTable({ analyses }) {
+  const tickers = Object.keys(analyses);
+  if (!tickers.length)
+    return <div className="text-dim" style={{ fontSize: '0.75rem' }}>No per-stock data yet.</div>;
+
+  return (
+    <div style={{ overflowY: 'auto', maxHeight: '300px' }}>
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Sent.</th>
+            <th>Dir.</th>
+            <th>Gate</th>
+            <th>Health</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tickers.map(ticker => {
+            const d    = analyses[ticker];
+            const sent = fmtSentiment(d.sentiment?.sentiment_score);
+            const dir  = fmtDirection(d.technical?.direction);
+            const hlth = fmtHealth(d.fundamentals?.health_score);
+            const ok   = d.sentiment && d.technical && d.fundamentals;
+            return (
+              <tr key={ticker} style={!ok ? { opacity: 0.45 } : {}}>
+                <td style={{ fontWeight: 700, color: 'var(--text-highlight)' }}>{ticker}</td>
+                <td className={sent.cls}>{sent.text}</td>
+                <td className={dir.cls}>{dir.text}</td>
+                <td className="text-dim" style={{ fontSize: '0.68rem' }}>{d.technical?.gate ?? '—'}</td>
+                <td className={hlth.cls}>{hlth.text}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SignalRanking({ analyses }) {
+  const ranked = Object.entries(analyses)
+    .map(([ticker, d]) => ({ ticker, d, score: compositeScore(d) }))
+    .filter(x => x.d.sentiment && x.d.technical && x.d.fundamentals)
+    .sort((a, b) => b.score - a.score);
+
+  if (!ranked.length)
+    return <div className="text-dim" style={{ fontSize: '0.75rem' }}>No complete stock data to rank.</div>;
+
+  return (
+    <div style={{ overflowY: 'auto', maxHeight: '260px' }}>
+      <div className="text-dim" style={{ fontSize: '0.68rem', marginBottom: '0.4rem' }}>
+        Ranked by composite signal (sentiment + direction + fundamentals).
+        Portfolio-Decision agent has not run — these are raw Phase 1 signals only.
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ticker</th>
+            <th>Score</th>
+            <th>Sent.</th>
+            <th>Dir.</th>
+            <th>Health</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ranked.map(({ ticker, d, score }, i) => {
+            const sent = fmtSentiment(d.sentiment?.sentiment_score);
+            const dir  = fmtDirection(d.technical?.direction);
+            const hlth = fmtHealth(d.fundamentals?.health_score);
+            return (
+              <tr key={ticker}>
+                <td className="text-dim">{i + 1}</td>
+                <td style={{ fontWeight: 700, color: 'var(--text-highlight)' }}>{ticker}</td>
+                <td className={score > 0.5 ? 'text-pos' : score < -0.5 ? 'text-neg' : 'text-dim'}>
+                  {score > 0 ? '+' : ''}{score.toFixed(2)}
+                </td>
+                <td className={sent.cls}>{sent.text}</td>
+                <td className={dir.cls}>{dir.text}</td>
+                <td className={hlth.cls}>{hlth.text}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function WeightsTable({ weights, analyses }) {
+  const entries = Object.entries(weights).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) return null;
+
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Weight</th>
+          <th>Dir.</th>
+          <th>Sent.</th>
+          <th>Health</th>
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map(([ticker, w]) => {
+          const d    = analyses[ticker] || {};
+          const dir  = fmtDirection(d.technical?.direction);
+          const sent = fmtSentiment(d.sentiment?.sentiment_score);
+          const hlth = fmtHealth(d.fundamentals?.health_score);
+          return (
+            <tr key={ticker}>
+              <td style={{ fontWeight: 700, color: 'var(--text-highlight)' }}>{ticker}</td>
+              <td className="text-info">{fmtPct(w)}</td>
+              <td className={dir.cls}>{dir.text}</td>
+              <td className={sent.cls}>{sent.text}</td>
+              <td className={hlth.cls}>{hlth.text}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function CompliancePanel({ compliance, hasWeights }) {
+  const { sector_weights, single_name_max, sector_max, gross_exposure, violations } = compliance;
+
+  if (!hasWeights) {
+    return (
+      <>
+        <div className="flex-between">
+          <span className="text-dim">SINGLE-NAME CAP</span>
+          <span className="text-white">{fmtPct(single_name_max)}</span>
+        </div>
+        <div className="flex-between">
+          <span className="text-dim">SECTOR CAP</span>
+          <span className="text-white">{fmtPct(sector_max)}</span>
+        </div>
+        <div className="text-dim" style={{ fontSize: '0.7rem', marginTop: '0.3rem' }}>
+          Checks active once Portfolio-Decision runs.
+        </div>
+      </>
+    );
   }
-};
 
-const EquityCurve = () => (
-  <div style={{ position: 'relative', width: '100%', height: '100px', marginTop: '0.8rem' }}>
-    <div style={{ position: 'absolute', top: 0, right: 0, fontSize: '0.65rem', color: 'var(--positive)' }}>SOTA ENGINE</div>
-    <div style={{ position: 'absolute', top: '15px', right: 0, fontSize: '0.65rem', color: '#666' }}>S&P 100 BMRK</div>
-    <div style={{ position: 'absolute', top: '30px', right: 0, fontSize: '0.65rem', color: 'var(--negative)' }}>DRAWDOWN</div>
-    <svg viewBox="0 0 300 100" style={{ width: '100%', height: '100%', borderBottom: '1px solid var(--border-subtle)' }}>
-      {/* Drawdown shading */}
-      <path d="M0,100 L0,80 L20,82 L40,85 L80,50 L100,55 L150,20 L200,30 L250,10 L300,5 L300,100 Z" fill="rgba(255, 51, 102, 0.15)" />
+  return (
+    <>
+      <div className="flex-between">
+        <span className="text-dim">GROSS EXPOSURE</span>
+        <span className="text-white">{fmtPct(gross_exposure)}</span>
+      </div>
+      {Object.entries(sector_weights)
+        .sort((a, b) => b[1] - a[1])
+        .map(([sector, w]) => {
+          const over = w > sector_max;
+          return (
+            <div className="flex-between" key={sector}>
+              <span className="text-dim" style={{ fontSize: '0.72rem' }}>{sector.toUpperCase()}</span>
+              <span className={over ? 'text-neg' : 'text-white'}>
+                {fmtPct(w)} {over ? 'WARN' : 'OK'}
+              </span>
+            </div>
+          );
+        })}
+      {violations.length > 0 && (
+        <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.5rem' }}>
+          {violations.map((v, i) => (
+            <div key={i} className="text-neg" style={{ fontSize: '0.7rem' }}>{v}</div>
+          ))}
+        </div>
+      )}
+      {violations.length === 0 && (
+        <div className="text-pos" style={{ fontSize: '0.7rem', marginTop: '0.3rem' }}>
+          All constraints satisfied.
+        </div>
+      )}
+    </>
+  );
+}
 
-      {/* Strategy Curve */}
-      <polyline points="0,80 20,82 40,85 80,50 100,55 150,20 200,30 250,10 300,5" fill="none" stroke="var(--positive)" strokeWidth="1.5" />
+// ── Main App ──────────────────────────────────────────────────────────────
 
-      {/* Benchmark Curve */}
-      <polyline points="0,95 20,90 40,92 80,75 100,85 150,60 200,70 250,65 300,55" fill="none" stroke="#666" strokeWidth="1" strokeDasharray="4 4" />
-    </svg>
-  </div>
-);
-
-const CpcvHistogram = () => (
-  <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', height: '40px', gap: '2px', marginTop: '0.5rem' }}>
-    <div style={{ position: 'absolute', top: '-15px', left: '60%', fontSize: '0.65rem', color: 'var(--info)' }}>DSR: 1.84</div>
-    {[1.1, 1.3, 1.8, 3.4, 5.1, 6.5, 5.2, 3.8, 2.1, 1.4, 0.9].map((h, i) => (
-      <div key={i} style={{ flex: 1, background: 'var(--border-strong)', height: `${h * 5}px` }}></div>
-    ))}
-    <div style={{ position: 'absolute', left: '62%', width: '1px', height: '45px', background: 'var(--info)' }} />
-  </div>
-);
-
-function App() {
+export default function App() {
+  const [selectedDate, setSelectedDate] = useState(null);
+  const dates = useDates();
+  const { data, error, loading, lastFetch, refresh } = useStatus(selectedDate);
+  const [execLog, setExecLog] = useState([]);
   const [executing, setExecuting] = useState(false);
-  const [log, setLog] = useState([]);
+
+  // Build pipeline event log from API data whenever data updates
+  useEffect(() => {
+    if (!data) return;
+    const { pipeline_run: run, portfolio, risk_actions } = data;
+    const log = [];
+
+    if (!run.phase1_complete) {
+      log.push('[SYS]  No pipeline data. Run orchestrator/daily_pipeline.py to start.');
+    } else {
+      log.push(`[INFO] Phase 1 complete — ${run.stocks_complete}/${run.stocks_total} stocks analyzed`);
+      if (run.stocks_complete < run.stocks_total) {
+        const missing = run.stocks_total - run.stocks_complete;
+        log.push(`[WARN] ${missing} stock(s) had a failed agent call (Fundamentals likely)`);
+      }
+    }
+
+    if (run.phase2_complete) {
+      const style = portfolio.trading_style?.toUpperCase() ?? '?';
+      log.push(`[INFO] Phase 2 complete — style=${style}, cash=${fmtPct(portfolio.cash_reserve)}`);
+      const nPositions = Object.keys(portfolio.weights).length;
+      log.push(`[INFO] ${nPositions} position(s) in target portfolio`);
+    } else if (run.phase1_complete) {
+      log.push('[ERR]  Phase 2 did not run — Portfolio-Decision agent missing or crashed');
+    }
+
+    if (run.phase3_complete) {
+      log.push(`[INFO] Phase 3 complete — ${risk_actions.length} risk action(s)`);
+      risk_actions.forEach(a =>
+        log.push(`       ${a.ticker}: ${a.action} | PnL ${a.pnl != null ? a.pnl.toFixed(2) : '?'}%`)
+      );
+    } else if (run.phase2_complete) {
+      log.push('[ERR]  Phase 3 did not run — Risk-Management agent missing or crashed');
+    }
+
+    setExecLog(log);
+  }, [data]);
 
   const handleRebalance = () => {
     setExecuting(true);
-    setLog(["[SYS] Dispatching API Call to Execution Node..."]);
-    setTimeout(() => setLog(p => [...p, "[API] NAV: 100000.0 | Cash: 63000.0"]), 500);
-    setTimeout(() => setLog(p => [...p, "[EXEC] AAPL Diff: $15,000 -> Constructing Bracket..."]), 1200);
-    setTimeout(() => setLog(p => [...p, "[FILL] NVDA 124 shares @ MKT | Realized Slippage: 1.4bps"]), 2200);
+    setExecLog(p => [...p, '[SYS]  Execution via dashboard not supported.']);
     setTimeout(() => {
-      setLog(p => [...p, "[SYS] Recon Complete. Target weights secured."]);
+      setExecLog(p => [...p, '[INFO] Run orchestrator/daily_pipeline.py for live execution.']);
       setExecuting(false);
-    }, 3200);
+    }, 1200);
   };
+
+  // ── Loading / Error screens ──────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="dashboard-container" style={{ paddingTop: '3rem', textAlign: 'center' }}>
+        <div className="text-dim">CONNECTING TO BACKEND...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="dashboard-container" style={{ paddingTop: '3rem' }}>
+        <div className="panel" style={{ maxWidth: '560px' }}>
+          <div className="panel-header">Backend Offline</div>
+          <div className="text-neg" style={{ marginBottom: '0.5rem' }}>{error}</div>
+          <div className="text-dim" style={{ fontSize: '0.75rem' }}>
+            Start the server from the project root:
+          </div>
+          <div className="text-white" style={{ fontSize: '0.75rem', margin: '0.4rem 0 1rem' }}>
+            uvicorn backend.server:app --reload --port 8000
+          </div>
+          <button className="button-trigger" onClick={refresh}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  const { pipeline_run: run, portfolio, stock_analyses, compliance, risk_actions } = data;
+  const hasWeights = Object.keys(portfolio.weights).length > 0;
+  const styleColor = portfolio.trading_style === 'aggressive' ? 'text-neg'
+                   : portfolio.trading_style === 'conservative' ? 'text-info'
+                   : 'text-neutral';
+
+  // ── Main layout ──────────────────────────────────────────────────────────
 
   return (
     <div className="dashboard-container">
+
+      {/* Header */}
       <header className="terminal-header">
         <div>
-          <h1 className="terminal-title">HAILMARY OEX / S&P 100</h1>
-          <span className="text-dim">SYS_VER: P5 COMBINATORIAL PURGED | OOS DEFLATED (DSR: {SYS_STATE.modelHealth.dsr})</span>
+          <h1 className="terminal-title">HAILMARY OEX / S&amp;P 100</h1>
+          <div style={{ display: 'flex', gap: '1.2rem', alignItems: 'center', marginTop: '0.2rem', fontSize: '0.7rem' }}>
+            <span>P1: {run.phase1_complete ? <span className="text-pos">OK</span> : <span className="text-neg">--</span>}</span>
+            <span>P2: {run.phase2_complete ? <span className="text-pos">OK</span> : <span className="text-neg">--</span>}</span>
+            <span>P3: {run.phase3_complete ? <span className="text-pos">OK</span> : <span className="text-neg">--</span>}</span>
+            <span className="text-dim">{run.stocks_complete}/{run.stocks_total} stocks</span>
+            <span className="text-dim">{run.total_entries} entries</span>
+          </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <span className="text-info tracking-wide">LIVE.ALPACA</span><br />
-          <span className="text-dim">{SYS_STATE.execution.lastFetch}</span>
+          <span className="text-info" style={{ fontSize: '0.8rem' }}>LIVE.ALPACA.PAPER</span>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.2rem', alignItems: 'center' }}>
+            {dates.length > 0 && (
+              <select
+                value={selectedDate ?? ''}
+                onChange={e => setSelectedDate(e.target.value || null)}
+                style={{ background: '#111', color: '#666', border: '1px solid #333', fontFamily: 'inherit', fontSize: '0.7rem', padding: '2px 4px' }}
+              >
+                <option value="">Today</option>
+                {dates.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            )}
+            <span className="text-dim" style={{ fontSize: '0.65rem' }}>Updated {fmtTs(lastFetch)}</span>
+          </div>
         </div>
       </header>
 
       <div className="grid-main">
-        {/* LEFT COLUMN: PERFORMANCE & HEALTH */}
+
+        {/* ── LEFT COLUMN ── */}
         <div className="flex-col">
-          <div className="panel">
-            <div className="panel-header">Performance & Risk</div>
-            <div className="grid-2">
-              <div>
-                <div className="metric-label">CURRENT vs MAX DD</div>
-                <div className="metric-val text-white">{SYS_STATE.performance.currentDD} / <span className="text-dim">{SYS_STATE.performance.maxDD}</span></div>
-              </div>
-              <div>
-                <div className="metric-label">ROLLING 60D SHARPE</div>
-                <div className="metric-val text-info">{SYS_STATE.performance.sharpe60d}</div>
-              </div>
-              <div>
-                <div className="metric-label">MTD / YTD RET</div>
-                <div className="metric-val text-pos">{SYS_STATE.performance.mtd} / {SYS_STATE.performance.ytd}</div>
-              </div>
-              <div>
-                <div className="metric-label">ROLLING RANK IC</div>
-                <div className="metric-val text-white">{SYS_STATE.performance.rollingRankIC}</div>
-              </div>
-            </div>
-            <EquityCurve />
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">Model Health & Validation</div>
-            <div className="flex-between">
-              <span className="text-dim">LIVE IC VS BACKTEST IC</span>
-              <span className="text-white">{SYS_STATE.modelHealth.liveIC} / {SYS_STATE.modelHealth.backtestIC}</span>
-            </div>
-            <div className="progress-bar-bg"><div className="progress-bar-fill" style={{ width: `${(SYS_STATE.modelHealth.liveIC / SYS_STATE.modelHealth.backtestIC) * 100}%`, background: 'var(--positive)' }}></div></div>
-
-            <div className="flex-between" style={{ marginTop: '0.4rem' }}>
-              <span className="text-dim">FEATURE DRIFT (PSI)</span>
-              <span className={SYS_STATE.modelHealth.featureDrift > 0.05 ? "text-neg" : "text-white"}>{SYS_STATE.modelHealth.featureDrift}</span>
-            </div>
-            <div className="flex-between">
-              <span className="text-dim">PROB. OVERFIT (PBO)</span>
-              <span className="text-white">{SYS_STATE.modelHealth.pbo}</span>
-            </div>
-
-            <div style={{ marginTop: '0.8rem' }}>
-              <span className="text-dim" style={{ fontSize: '0.65rem' }}>CPCV PATH DISTRIBUTION (SHARPE)</span>
-              <CpcvHistogram />
-            </div>
-
-            <div className="flex-between" style={{ marginTop: '0.8rem' }}>
-              <span className="text-dim">LAST RETRAIN</span>
-              <span className="text-dim">{SYS_STATE.modelHealth.lastRetrain}</span>
-            </div>
-            <div className="flex-between">
-              <span className="text-dim">NEXT SCHEDULED</span>
-              <span className="text-white">{SYS_STATE.modelHealth.nextRetrain}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* MIDDLE COLUMN: REGIME & POSITIONS */}
-        <div className="flex-col">
-          <div className="panel">
-            <div className="panel-header flex-between">
-              <span>Composite Market Regime</span>
-              <span>TARGET VOL: {SYS_STATE.regime.targetVol * 100}% | REALIZED: {(SYS_STATE.regime.realizedVol * 100).toFixed(1)}%</span>
-            </div>
-            <div className="grid-3" style={{ marginBottom: '0.5rem' }}>
-              <div>
-                <div className="metric-label">SMA-200 DISTANCE</div>
-                <div className="metric-val text-neg">{SYS_STATE.regime.sma200Dist}</div>
-              </div>
-              <div>
-                <div className="metric-label">ADX INDICATION ({SYS_STATE.regime.adxScore})</div>
-                <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '2px' }}>{SYS_STATE.regime.adxLabel}</div>
-              </div>
-              <div>
-                <div className="metric-label">COMPOSITE MULTIPLIER</div>
-                <div className="metric-val text-info">{(SYS_STATE.regime.scaler * SYS_STATE.regime.combinedScore).toFixed(2)}x</div>
-              </div>
-            </div>
-
-            <div className="metric-label" style={{ marginTop: '0.2rem', marginBottom: '0.1rem' }}>TRAILING 60-DAY REGIME STATE TRANSITIONS</div>
-            <div className="regime-strip">
-              {SYS_STATE.regime.stripHistory.map((s, i) => (
-                <div key={i} className={`strip-block strip-${s}`}></div>
-              ))}
-            </div>
-          </div>
+          <PipelineStatus run={{ ...run, date: data.date }} />
 
           <div className="panel" style={{ flex: 1 }}>
-            <div className="panel-header">Active Alignments & Feature Attribution</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Ticker</th>
-                  <th>Weight</th>
-                  <th>Vol Contrib</th>
-                  <th>Feature Drivers (Attribution)</th>
-                  <th>Drift</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SYS_STATE.positions.map((p, i) => (
-                  <tr key={i}>
-                    <td className="text-white font-weight-700">{p.ticker}</td>
-                    <td className="text-info">{p.exp}</td>
-                    <td className="text-neutral">{p.riskAttr}</td>
-                    <td className="text-dim">{p.attr}</td>
-                    <td className={p.drift > 0 ? "text-pos" : "text-neg"}>{p.drift}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.5rem' }}>
-              <div className="metric-label">SECTOR EXPOSURE (% Portfolio)</div>
-              {SYS_STATE.sectors.map((s, i) => (
-                <div className="flex-between" key={i} style={{ marginTop: '2px' }}>
-                  <span className="text-dim">{s.name}</span>
-                  <span className="text-white">{s.val}</span>
-                </div>
-              ))}
-            </div>
+            <div className="panel-header">Per-Stock Analysis — Phase 1</div>
+            <StockTable analyses={stock_analyses} />
           </div>
         </div>
 
-        {/* RIGHT COLUMN: OP EXECUTION */}
+        {/* ── MIDDLE COLUMN ── */}
         <div className="flex-col">
+
+          {/* Portfolio decision */}
           <div className="panel">
-            <div className="panel-header">Pre-Trade Compliance Checks</div>
-            <div className="flex-between">
-              <span className="text-dim">SINGLE-NAME CAP ({SYS_STATE.compliance.singleNameMax.limit})</span>
-              <span className={SYS_STATE.compliance.singleNameMax.pass ? "text-pos" : "text-neg"}>{SYS_STATE.compliance.singleNameMax.pass ? "PASS" : "WARN"} [{SYS_STATE.compliance.singleNameMax.current}]</span>
+            <div className="panel-header flex-between">
+              <span>Portfolio Decision</span>
+              {portfolio.trading_style && (
+                <span className={styleColor}>{portfolio.trading_style.toUpperCase()}</span>
+              )}
             </div>
-            <div className="flex-between">
-              <span className="text-dim">SECTOR CAP ({SYS_STATE.compliance.sectorCap.limit})</span>
-              <span className={SYS_STATE.compliance.sectorCap.pass ? "text-pos" : "text-neg"}>{SYS_STATE.compliance.sectorCap.pass ? "PASS" : "WARN"} [{SYS_STATE.compliance.sectorCap.current}]</span>
-            </div>
-            <div className="flex-between">
-              <span className="text-dim">GROSS EXP. ({SYS_STATE.compliance.grossExp.limit})</span>
-              <span className={SYS_STATE.compliance.grossExp.pass ? "text-pos" : "text-neg"}>{SYS_STATE.compliance.grossExp.pass ? "PASS" : "WARN"} [{SYS_STATE.compliance.grossExp.current}]</span>
-            </div>
+
+            {run.phase2_complete ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <div>
+                    <div className="metric-label">Trading Style</div>
+                    <div className="metric-val">{portfolio.trading_style ?? '—'}</div>
+                  </div>
+                  <div>
+                    <div className="metric-label">Cash Reserve</div>
+                    <div className="metric-val text-info">{fmtPct(portfolio.cash_reserve)}</div>
+                  </div>
+                </div>
+                {portfolio.rationale && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#888', lineHeight: 1.45, borderTop: '1px solid var(--border-subtle)', paddingTop: '0.5rem' }}>
+                    {portfolio.rationale}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ padding: '0.5rem 0' }}>
+                <div className="text-dim" style={{ fontSize: '0.75rem' }}>
+                  Phase 2 has not run — no portfolio decision available.
+                </div>
+                <div className="text-dim" style={{ fontSize: '0.65rem', marginTop: '0.3rem' }}>
+                  Cash: 100% | Style: pending
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Weights or signal ranking */}
+          <div className="panel" style={{ flex: 1 }}>
+            <div className="panel-header">
+              {hasWeights ? 'Target Portfolio Weights' : 'Phase 1 Signal Ranking (No Portfolio Decision Yet)'}
+            </div>
+            {hasWeights
+              ? <WeightsTable weights={portfolio.weights} analyses={stock_analyses} />
+              : <SignalRanking analyses={stock_analyses} />
+            }
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN ── */}
+        <div className="flex-col">
+
+          {/* Compliance */}
+          <div className="panel">
+            <div className="panel-header">Pre-Trade Compliance</div>
+            <CompliancePanel compliance={compliance} hasWeights={hasWeights} />
+          </div>
+
+          {/* Execution subsystem */}
           <div className="panel">
             <div className="panel-header">Execution Subsystem</div>
             <div className="flex-between">
               <span className="text-dim">ROUTING</span>
-              <span className="text-white">{SYS_STATE.execution.routing}</span>
-            </div>
-            <div className="flex-between">
-              <span className="text-dim">SLIPPAGE MODEL</span>
-              <span className="text-dim">{SYS_STATE.execution.slippageModel}</span>
+              <span className="text-white">ALPACA (PAPER)</span>
             </div>
             <div className="flex-between">
               <span className="text-dim">CASH RESERVE</span>
-              <span className="text-white">{SYS_STATE.execution.cashPct}</span>
+              <span className="text-white">{fmtPct(portfolio.cash_reserve)}</span>
+            </div>
+            <div className="flex-between">
+              <span className="text-dim">OPEN POSITIONS</span>
+              <span className="text-white">{Object.keys(portfolio.weights).length}</span>
+            </div>
+            <div className="flex-between">
+              <span className="text-dim">RISK ACTIONS</span>
+              <span className={risk_actions.length > 0 ? 'text-neutral' : 'text-dim'}>
+                {risk_actions.length}
+              </span>
             </div>
           </div>
 
+          {/* Pipeline log */}
           <div className="panel" style={{ flex: 1 }}>
             <div className="panel-header flex-between">
-              <span>Execution Log</span>
-              <a href="#" onClick={(e) => { e.preventDefault(); handleRebalance() }} className="text-dim" style={{ fontFamily: 'inherit', fontSize: '0.65rem', textDecoration: 'none' }}>[ADMIN: EXECUTE PREDICTIONS]</a>
+              <span>Pipeline Log</span>
+              <a
+                href="#"
+                onClick={e => { e.preventDefault(); if (!executing) handleRebalance(); }}
+                className="text-dim"
+                style={{ fontFamily: 'inherit', fontSize: '0.65rem', textDecoration: 'none' }}
+              >
+                [TRIGGER REBALANCE]
+              </a>
             </div>
             <div className="log-terminal">
-              {log.length === 0 ? "IDLE. STANDBY FOR SERVER WEBSOCKET..." : log.map((l, i) => <div key={i}>{l}</div>)}
+              {execLog.length === 0
+                ? 'IDLE. NO DATA.'
+                : execLog.map((line, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      color: line.startsWith('[ERR')  ? 'var(--negative)'
+                           : line.startsWith('[WARN') ? 'var(--neutral)'
+                           : line.startsWith('[SYS')  ? 'var(--info)'
+                           : '#888',
+                    }}
+                  >
+                    {line}
+                  </div>
+                ))
+              }
             </div>
           </div>
         </div>
@@ -285,5 +565,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

@@ -9,3 +9,4 @@ data/processed/
 .DS_Store
 dist/
 dashboard/node_modules/
+backend/*.log

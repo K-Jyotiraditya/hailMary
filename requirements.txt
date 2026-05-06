@@ -29,6 +29,14 @@ matplotlib==3.7.2
 seaborn==0.12.2
 plotly==5.17.0
 
+# Backend API
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# Broker & News integrations
+finnhub-python==2.4.20
+alpaca-trade-api==3.2.0
+
 # Utilities
 python-dateutil==2.8.2
 pytz==2023.3
