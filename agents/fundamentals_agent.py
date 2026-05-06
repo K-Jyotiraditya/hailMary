@@ -68,8 +68,15 @@ Respond with ONLY a JSON object:
 
     def parse_response(self, raw_text: str) -> Dict[str, Any]:
         data = self.extract_json(raw_text)
+        # LLMs sometimes return health_score as a float or float-string (e.g. "72.5").
+        # int("72.5") raises ValueError, so convert via float first.
+        raw_score = data.get("health_score", 50) or 50
+        try:
+            health_score = int(float(raw_score))
+        except (ValueError, TypeError):
+            health_score = 50
         return {
-            "health_score": int(data.get("health_score", 50)),
+            "health_score": max(0, min(100, health_score)),
             "key_strength": data.get("key_strength", ""),
             "key_risk": data.get("key_risk", ""),
         }

@@ -104,12 +104,28 @@ def save_portfolio_state(weights: dict, equity: float = 100000):
         json.dump(state, f, indent=2)
 
 
+def check_ollama() -> bool:
+    """Return True if the local Ollama service is reachable."""
+    import requests
+    try:
+        r = requests.get("http://localhost:11434/api/tags", timeout=5)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
 def run_daily_pipeline():
     """Execute the complete daily trading pipeline."""
     print("=" * 70)
     print(f"  TRADINGGROUP V2 — DAILY PIPELINE")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
+
+    if not check_ollama():
+        print("\n  [FATAL] Ollama is not running on localhost:11434.")
+        print("  Start it with: ollama serve")
+        print("  Then retry:    python orchestrator/daily_pipeline.py\n")
+        return {}
 
     news_agent = NewsSentimentAgent()
     tech_agent = TechnicalForecasterAgent()
@@ -123,34 +139,48 @@ def run_daily_pipeline():
 
     for ticker in WATCHLIST:
         print(f"  ── {ticker} ──")
+        try:
+            # News
+            news_out = news_agent.run({"ticker": ticker})
+            log_agent_output(news_out)
+            sent_data = news_out.data
+            print(f"    News:  sentiment={sent_data.get('sentiment_score', 0):+.2f} | {sent_data.get('key_theme', '')[:50]}")
 
-        # News
-        news_out = news_agent.run({"ticker": ticker})
-        log_agent_output(news_out)
-        sent_data = news_out.data
-        print(f"    News:  sentiment={sent_data.get('sentiment_score', 0):+.2f} | {sent_data.get('key_theme', '')[:50]}")
+            # Technical (inject sentiment context)
+            tech_out = tech_agent.run({
+                "ticker": ticker,
+                "sentiment_score": sent_data.get("sentiment_score", 0),
+                "news_theme": sent_data.get("key_theme", ""),
+            })
+            log_agent_output(tech_out)
+            tech_data = tech_out.data
+            print(f"    Tech:  {tech_data.get('direction', '?')} (conf={tech_data.get('confidence', 0):.1f}) | {tech_data.get('gate', '')}")
 
-        # Technical (inject sentiment context)
-        tech_out = tech_agent.run({
-            "ticker": ticker,
-            "sentiment_score": sent_data.get("sentiment_score", 0),
-            "news_theme": sent_data.get("key_theme", ""),
-        })
-        log_agent_output(tech_out)
-        tech_data = tech_out.data
-        print(f"    Tech:  {tech_data.get('direction', '?')} (conf={tech_data.get('confidence', 0):.1f}) | {tech_data.get('gate', '')}")
+            # Fundamentals
+            fund_out = fund_agent.run({"ticker": ticker})
+            log_agent_output(fund_out)
+            fund_data = fund_out.data
+            print(f"    Fund:  health={fund_data.get('health_score', 50)}/100")
 
-        # Fundamentals
-        fund_out = fund_agent.run({"ticker": ticker})
-        log_agent_output(fund_out)
-        fund_data = fund_out.data
-        print(f"    Fund:  health={fund_data.get('health_score', 50)}/100")
+            stock_analyses[ticker] = {
+                "sentiment": sent_data,
+                "technical": tech_data,
+                "fundamentals": fund_data,
+            }
 
-        stock_analyses[ticker] = {
-            "sentiment": sent_data,
-            "technical": tech_data,
-            "fundamentals": fund_data,
-        }
+        except Exception as exc:
+            print(f"    [ERROR] {ticker} agent failed: {exc} — skipping, using neutral defaults")
+            err_out = AgentOutput(
+                agent_name="Pipeline-Error",
+                data={"ticker": ticker, "error": str(exc)},
+                reasoning=f"Unhandled exception during {ticker} analysis",
+            )
+            log_agent_output(err_out)
+            stock_analyses[ticker] = {
+                "sentiment":    {"sentiment_score": 0.0, "confidence": 0.0, "key_theme": "analysis failed"},
+                "technical":    {"direction": "sideways", "confidence": 0.0, "gate": "ERROR"},
+                "fundamentals": {"health_score": 50, "key_strength": "", "key_risk": ""},
+            }
 
     # ── Phase 2: Portfolio-Level Decisions ──
     print(f"\n[Phase 2] Portfolio-level intelligence...\n")

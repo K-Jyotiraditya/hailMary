@@ -13,6 +13,7 @@ from config.watchlist import WATCHLIST, SECTORS, MAX_SINGLE_POSITION, MAX_SECTOR
 
 PER_STOCK_AGENTS = {"News-Sentiment", "Technical-Forecaster", "Fundamentals"}
 PORTFOLIO_AGENTS = {"Risk-Style", "Portfolio-Decision", "Risk-Management"}
+ERROR_AGENTS = {"Pipeline-Error"}
 
 
 def parse_daily_log(date_str: str) -> Optional[dict]:
@@ -28,6 +29,7 @@ def parse_daily_log(date_str: str) -> Optional[dict]:
 
     per_stock = [e for e in entries if e["agent"] in PER_STOCK_AGENTS]
     portfolio = [e for e in entries if e["agent"] in PORTFOLIO_AGENTS]
+    errors    = [e for e in entries if e["agent"] in ERROR_AGENTS]
 
     # Reconstruct per-ticker blocks: entries arrive as [N,T,F, N,T,F, ...]
     # When an agent fails silently it is never logged, so the next ticker's
@@ -83,6 +85,7 @@ def parse_daily_log(date_str: str) -> Optional[dict]:
     )
 
     last_ts = entries[-1]["timestamp"] if entries else None
+    error_tickers = [e["data"].get("ticker") for e in errors]
 
     return {
         "date": date_str,
@@ -95,6 +98,7 @@ def parse_daily_log(date_str: str) -> Optional[dict]:
             "stocks_analyzed": len(stock_analyses),
             "stocks_complete": complete_stocks,
             "stocks_total": len(WATCHLIST),
+            "error_tickers": error_tickers,
         },
         "portfolio": {
             "weights": weights,
