@@ -10,3 +10,6 @@ data/processed/
 dist/
 dashboard/node_modules/
 backend/*.log
+.pytest_cache/
+pytest-cache-files-*/
+data/yfinance_cache/

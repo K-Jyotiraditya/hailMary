@@ -4,9 +4,9 @@ Fundamentals Agent — Assesses financial health using yfinance data.
 Fetches P/E, EPS, revenue growth, debt/equity, and free cash flow,
 then prompts Gemini to produce a financial health score (0-100).
 """
-import yfinance as yf
 from typing import Dict, Any
 from agents.base_agent import BaseAgent
+from data.market_data import yf_ticker
 
 
 class FundamentalsAgent(BaseAgent):
@@ -15,7 +15,7 @@ class FundamentalsAgent(BaseAgent):
     def _fetch_fundamentals(self, ticker: str) -> dict:
         """Pull key financial metrics from yfinance."""
         try:
-            stock = yf.Ticker(ticker)
+            stock = yf_ticker(ticker)
             info = stock.info
             return {
                 "pe_ratio": info.get("trailingPE"),

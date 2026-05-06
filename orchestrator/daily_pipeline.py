@@ -24,6 +24,7 @@ from agents.fundamentals_agent import FundamentalsAgent
 from agents.risk_style import RiskStyleAgent
 from agents.portfolio_decision import PortfolioDecisionAgent
 from agents.base_agent import log_agent_output, AgentOutput
+from data.market_data import yf_download
 from risk.risk_manager import RiskManager
 
 
@@ -73,14 +74,13 @@ def load_current_positions() -> dict:
 
 def save_portfolio_state(weights: dict, equity: float = 100000):
     """Save the portfolio state for next-day risk monitoring."""
-    import yfinance as yf
 
     positions = {}
     for ticker, w in weights.items():
         if w <= 0:
             continue
         try:
-            data = yf.download(ticker, period="1d", progress=False, multi_level_index=False)
+            data = yf_download(ticker, period="1d", progress=False, multi_level_index=False)
             if not data.empty:
                 price = float(data["Close"].iloc[-1])
                 dollar_alloc = equity * w
@@ -248,11 +248,10 @@ def run_daily_pipeline():
     risk_mgr = RiskManager(style=style)
 
     if state["positions"]:
-        import yfinance as yf
         risk_positions = []
         for ticker, pos_data in state["positions"].items():
             try:
-                data = yf.download(ticker, period="1d", progress=False, multi_level_index=False)
+                data = yf_download(ticker, period="1d", progress=False, multi_level_index=False)
                 current_price = float(data["Close"].iloc[-1]) if not data.empty else pos_data["entry_price"]
             except Exception:
                 current_price = pos_data["entry_price"]

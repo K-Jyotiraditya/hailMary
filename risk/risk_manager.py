@@ -10,12 +10,12 @@ Implements the TradingGroup paper's risk management scheme:
 The module monitors positions and emits SELL signals when risk limits
 are breached, overriding the Portfolio-Decision Agent's recommendations.
 """
-import yfinance as yf
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+from data.market_data import yf_download
 
 
 # Style-dependent multipliers (from the paper Section 3.6)
@@ -93,7 +93,7 @@ class RiskManager:
         This matches the paper's formula exactly.
         """
         try:
-            data = yf.download(ticker, period="30d", progress=False, multi_level_index=False)
+            data = yf_download(ticker, period="30d", progress=False, multi_level_index=False)
             if data.empty or len(data) < 11:
                 return 0.02  # Default 2% daily vol if no data
             close = data["Close"]

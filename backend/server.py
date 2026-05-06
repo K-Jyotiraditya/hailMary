@@ -5,6 +5,7 @@ Run from project root:
     uvicorn backend.server:app --reload --port 8000
 """
 import json
+import os
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -17,11 +18,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.log_parser import parse_daily_log
 from config.watchlist import WATCHLIST, SECTORS
 
+
+def _cors_origins() -> list[str]:
+    configured = os.getenv("CORS_ORIGINS", "").strip()
+    if configured:
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+    return [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:4173",
+        "https://k-jyotiraditya.github.io",
+    ]
+
+
 app = FastAPI(title="HailMary API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:4173"],
+    allow_origins=_cors_origins(),
     allow_methods=["GET"],
     allow_headers=["*"],
 )
@@ -35,6 +50,17 @@ PORTFOLIO_STATE = Path("data/portfolio_state.json")
 @app.get("/health")
 def health():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/")
+def root():
+    return {
+        "name": "HailMary API",
+        "status": "ok",
+        "health": "/health",
+        "status_endpoint": "/api/status",
+        "watchlist_size": len(WATCHLIST),
+    }
 
 
 # ── Pipeline status ──────────────────────────────────────────────────────────

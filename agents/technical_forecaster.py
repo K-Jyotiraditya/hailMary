@@ -5,11 +5,11 @@ Computes RSI-14, 20-day SMA distance, ATR-20, HV-10 (matching the paper),
 then feeds them to Gemini with a hybrid gate that hard-intercepts
 overbought conditions without valid breakout.
 """
-import yfinance as yf
 import numpy as np
 import pandas as pd
 from typing import Dict, Any
 from agents.base_agent import BaseAgent
+from data.market_data import yf_download
 
 
 class TechnicalForecasterAgent(BaseAgent):
@@ -18,7 +18,7 @@ class TechnicalForecasterAgent(BaseAgent):
     def _compute_indicators(self, ticker: str) -> dict:
         """Compute all technical indicators matching the TradingGroup paper."""
         try:
-            data = yf.download(ticker, period="60d", progress=False, multi_level_index=False)
+            data = yf_download(ticker, period="60d", progress=False, multi_level_index=False)
             if data.empty or len(data) < 21:
                 return {}
 

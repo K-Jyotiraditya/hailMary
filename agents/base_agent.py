@@ -1,11 +1,12 @@
 """
 Base Agent — Foundation for all TradingGroup V2 agents.
 
-Handles Gemini API calls, prompt templating, structured JSON parsing,
-retry logic, and CoT trace logging.
+Handles Ollama LLM calls, prompt templating, structured JSON parsing,
+retry logic, and agent output logging.
 """
-import os
 import json
+import os
+import re
 import time
 import requests
 from pathlib import Path
@@ -15,12 +16,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL = "gemma4:e2b"
+MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e2b")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 
 
 class AgentOutput:
     """Standardized output from any agent."""
-    def __init__(self, agent_name: str, data: Dict[str, Any], reasoning: str, timestamp: str = None):
+    def __init__(self, agent_name: str, data: Dict[str, Any], reasoning: str,
+                 timestamp: Optional[str] = None):
         self.agent_name = agent_name
         self.data = data
         self.reasoning = reasoning
@@ -45,83 +48,86 @@ class BaseAgent:
 
     def __init__(self):
         self.model = MODEL
+        self.ollama_url = OLLAMA_URL
+        self.session = requests.Session()
 
     def build_prompt(self, context: Dict[str, Any]) -> str:
-        """Build the LLM prompt from context. Override in subclass."""
         raise NotImplementedError
 
     def parse_response(self, raw_text: str) -> Dict[str, Any]:
-        """Parse LLM response into structured data. Override in subclass."""
         raise NotImplementedError
 
     def call_llm(self, prompt: str) -> str:
         """Call local Ollama Gemma 4 with retry logic."""
         for attempt in range(self.MAX_RETRIES):
             try:
-                url = "http://localhost:11434/api/generate"
-                payload = {
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False
-                }
-                response = requests.post(url, json=payload, timeout=180)
+                response = self.session.post(
+                    self.ollama_url,
+                    json={"model": self.model, "prompt": prompt, "stream": False},
+                    timeout=180,
+                )
                 response.raise_for_status()
-                return response.json().get("response", "")
+                body = response.json()
+                return body.get("response", "") if isinstance(body, dict) else ""
             except Exception as e:
                 if attempt == self.MAX_RETRIES - 1:
-                    print(f"[{self.NAME}] Local LLM call failed after {self.MAX_RETRIES} attempts: {e}")
+                    print(f"[{self.NAME}] LLM call failed after {self.MAX_RETRIES} attempts: {e}")
                     return ""
                 wait = 2 * (attempt + 1)
-                print(f"[{self.NAME}] Retry {attempt+1}/{self.MAX_RETRIES} in {wait}s...")
+                print(f"[{self.NAME}] Retry {attempt + 1}/{self.MAX_RETRIES} in {wait}s...")
                 time.sleep(wait)
         return ""
 
     def extract_json(self, text: str) -> dict:
-        """Robustly extract JSON from LLM response (handles markdown fences)."""
+        """Robustly extract a JSON object from LLM response text.
+
+        Handles markdown code fences, leading/trailing prose, and nested
+        JSON objects (e.g. portfolio weights dict inside the outer object).
+        """
         text = text.strip()
-        # Strip markdown code fences
+
+        # Strip markdown fences first
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
         elif "```" in text:
             text = text.split("```")[1].split("```")[0]
+
+        # Try the whole stripped text
         try:
             return json.loads(text.strip())
         except json.JSONDecodeError:
-            # Try to find any JSON object in the text
-            import re
-            match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
-            if match:
-                try:
-                    return json.loads(match.group())
-                except json.JSONDecodeError:
-                    pass
-            return {}
+            pass
+
+        # Fallback: find the outermost {...} block (supports nested objects)
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
+        return {}
 
     def run(self, context: Dict[str, Any]) -> AgentOutput:
         """Execute the agent pipeline: build prompt → call LLM → parse."""
         prompt = self.build_prompt(context)
         raw = self.call_llm(prompt)
         data = self.parse_response(raw)
-        return AgentOutput(
-            agent_name=self.NAME,
-            data=data,
-            reasoning=raw,
-        )
+        return AgentOutput(agent_name=self.NAME, data=data, reasoning=raw)
 
 
 def log_agent_output(output: AgentOutput, log_dir: str = "data/agent_logs"):
-    """Persist agent output to daily log file."""
+    """Persist agent output to the daily log file."""
     Path(log_dir).mkdir(parents=True, exist_ok=True)
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    log_path = Path(log_dir) / f"{date_str}.json"
+    log_path = Path(log_dir) / f"{datetime.now().strftime('%Y-%m-%d')}.json"
 
-    entries = []
+    entries: list = []
     if log_path.exists():
-        with open(log_path, "r") as f:
-            try:
+        try:
+            with open(log_path) as f:
                 entries = json.load(f)
-            except json.JSONDecodeError:
-                entries = []
+        except json.JSONDecodeError:
+            entries = []
 
     entries.append(output.to_dict())
     with open(log_path, "w") as f:
