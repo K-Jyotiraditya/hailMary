@@ -21,6 +21,11 @@ load_dotenv()
 MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e2b")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 
+# Limit concurrent Ollama requests — local models choke when all 5 workers
+# fire simultaneously. 3 concurrent calls saturates a typical local GPU/CPU
+# without triggering 500 errors.
+_OLLAMA_SEM = threading.Semaphore(3)
+
 
 class AgentOutput:
     """Standardized output from any agent."""
@@ -60,14 +65,15 @@ class BaseAgent:
         raise NotImplementedError
 
     def call_llm(self, prompt: str) -> str:
-        """Call local Ollama Gemma 4 with retry logic."""
+        """Call local Ollama Gemma 4 with retry logic and concurrency throttle."""
         for attempt in range(self.MAX_RETRIES):
             try:
-                response = self.session.post(
-                    self.ollama_url,
-                    json={"model": self.model, "prompt": prompt, "stream": False},
-                    timeout=180,
-                )
+                with _OLLAMA_SEM:
+                    response = self.session.post(
+                        self.ollama_url,
+                        json={"model": self.model, "prompt": prompt, "stream": False},
+                        timeout=180,
+                    )
                 response.raise_for_status()
                 body = response.json()
                 raw = body.get("response", "") if isinstance(body, dict) else ""

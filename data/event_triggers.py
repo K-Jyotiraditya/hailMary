@@ -25,10 +25,12 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-PEAD_BEAT_THRESHOLD = 0.05    # 5% EPS beat required
-PEAD_LOOKBACK_DAYS  = 45      # only trigger if earnings were within 45 days
-PEAD_ALLOCATION     = 0.06    # 6% of portfolio per PEAD trigger
+PEAD_BEAT_THRESHOLD = 0.15    # 15% EPS beat required (filters out weak beats)
+PEAD_LOOKBACK_DAYS  = 30      # only trigger if earnings were within 30 days
+PEAD_MIN_DAYS_AFTER = 2       # skip day-of + day-after earnings (vol spike settles)
+PEAD_ALLOCATION     = 0.08    # 8% per PEAD trigger (fewer, bigger positions)
 PEAD_HOLD_DAYS      = 25      # expected hold period
+MAX_PEAD_POSITIONS  = 5       # cap at 5 best PEAD bets (ranked by surprise magnitude)
 
 INSIDER_MIN_BUYERS  = 2       # 2+ distinct insiders required
 INSIDER_LOOKBACK    = 45      # days to look back for cluster
@@ -77,7 +79,7 @@ def check_pead_trigger(ticker: str) -> dict:
 
             surprise_pct = (actual - estimate) / abs(estimate)
 
-            if surprise_pct >= PEAD_BEAT_THRESHOLD:
+            if surprise_pct >= PEAD_BEAT_THRESHOLD and days_ago >= PEAD_MIN_DAYS_AFTER:
                 return {
                     "triggered":          True,
                     "surprise_pct":       round(surprise_pct, 4),
@@ -156,6 +158,7 @@ def check_insider_cluster(ticker: str) -> dict:
 def get_all_event_signals(tickers: list, max_event_weight: float = 0.35) -> dict:
     """
     Check all tickers for PEAD and insider cluster signals.
+    PEAD signals are ranked by surprise magnitude; only top MAX_PEAD_POSITIONS kept.
 
     Returns dict:
       {
@@ -168,28 +171,39 @@ def get_all_event_signals(tickers: list, max_event_weight: float = 0.35) -> dict
     Only tickers with at least one trigger are included.
     Total event allocation is capped at max_event_weight of portfolio.
     """
-    triggered = {}
-    total_allocated = 0.0
+    pead_candidates = []   # (surprise_pct, ticker, pead_dict)
+    insider_triggered = {}
 
     for ticker in tickers:
-        events = []
-
         pead = check_pead_trigger(ticker)
         if pead["triggered"]:
-            events.append(pead)
+            pead_candidates.append((pead["surprise_pct"], ticker, pead))
 
         insider = check_insider_cluster(ticker)
         if insider["triggered"]:
-            events.append(insider)
+            insider_triggered[ticker] = insider
 
-        if events:
-            alloc = sum(e["allocation"] for e in events)
-            triggered[ticker] = {
-                "events":           events,
-                "total_allocation": round(alloc, 4),
-                "reasons":          [e["reason"] for e in events],
-            }
-            total_allocated += alloc
+    # Keep only top MAX_PEAD_POSITIONS PEAD bets by surprise magnitude
+    pead_candidates.sort(key=lambda x: x[0], reverse=True)
+    top_pead = {t: p for _, t, p in pead_candidates[:MAX_PEAD_POSITIONS]}
+
+    triggered = {}
+    total_allocated = 0.0
+
+    for ticker in set(list(top_pead.keys()) + list(insider_triggered.keys())):
+        events = []
+        if ticker in top_pead:
+            events.append(top_pead[ticker])
+        if ticker in insider_triggered:
+            events.append(insider_triggered[ticker])
+
+        alloc = sum(e["allocation"] for e in events)
+        triggered[ticker] = {
+            "events":           events,
+            "total_allocation": round(alloc, 4),
+            "reasons":          [e["reason"] for e in events],
+        }
+        total_allocated += alloc
 
     # Cap total event allocation
     if total_allocated > max_event_weight and triggered:
