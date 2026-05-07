@@ -32,10 +32,18 @@ SECTOR_MAP = {
 FORWARD_DAYS = 5
 
 FEATURE_COLS = [
+    # Technical
     "rsi", "macd_hist", "bb_pos", "atr_pct", "volume_ratio",
+    # Momentum
     "ret_5d", "ret_21d", "ret_63d", "momentum_12_1",
+    # Trend
     "price_vs_sma20", "price_vs_sma50",
+    # Market
     "sector_ret_5d", "spy_ret_5d", "vix",
+    # PEAD (earnings surprise)
+    "earnings_surprise_pct", "pead_signal",
+    # Google Trends
+    "gtrends_spike_ratio", "gtrends_spike_flag",
 ]
 
 
@@ -96,12 +104,21 @@ def _features_for(ticker: str, close_all: pd.DataFrame, volume_all: pd.DataFrame
         "label":           (fwd > 0).astype(int),
     }, index=c.index)
 
+    BASE_COLS = [
+        "rsi", "macd_hist", "bb_pos", "atr_pct", "volume_ratio",
+        "ret_5d", "ret_21d", "ret_63d", "momentum_12_1",
+        "price_vs_sma20", "price_vs_sma50",
+        "sector_ret_5d", "spy_ret_5d", "vix",
+    ]
     df["ticker"] = ticker
-    return df.dropna(subset=FEATURE_COLS + ["label"])
+    return df.dropna(subset=BASE_COLS + ["label"])
 
 
 def build_features(period: str = "1y") -> pd.DataFrame:
     """Download history for all watchlist stocks and return feature + label matrix."""
+    from data.earnings_tracker import build_pead_features
+    from data.google_trends import build_trends_features
+
     sector_etfs = list(set(SECTOR_MAP.values()))
     all_tickers = list(set(WATCHLIST + sector_etfs + ["SPY", "^VIX"]))
 
@@ -109,7 +126,6 @@ def build_features(period: str = "1y") -> pd.DataFrame:
     raw = yf.download(all_tickers, period=period, auto_adjust=True,
                       progress=False, threads=True)
 
-    # Handle both MultiIndex and flat column cases
     if isinstance(raw.columns, pd.MultiIndex):
         close_all = raw["Close"]
         volume_all = raw["Volume"] if "Volume" in raw.columns.get_level_values(0) else pd.DataFrame()
@@ -120,8 +136,35 @@ def build_features(period: str = "1y") -> pd.DataFrame:
     records = []
     for ticker in WATCHLIST:
         df = _features_for(ticker, close_all, volume_all)
-        if not df.empty:
-            records.append(df)
+        if df.empty:
+            continue
+
+        date_idx = df.index
+
+        # ── PEAD features ─────────────────────────────────────────────────
+        try:
+            pead_df = build_pead_features(ticker, date_idx)
+            df = df.join(pead_df[["earnings_surprise_pct", "pead_signal"]], how="left")
+        except Exception as e:
+            print(f"  [PEAD] {ticker}: {e}")
+            df["earnings_surprise_pct"] = 0.0
+            df["pead_signal"] = 0.0
+
+        # ── Google Trends features ─────────────────────────────────────────
+        try:
+            trends_df = build_trends_features(ticker, date_idx)
+            df = df.join(trends_df[["gtrends_spike_ratio", "gtrends_spike_flag"]], how="left")
+        except Exception as e:
+            print(f"  [GTrends] {ticker}: {e}")
+            df["gtrends_spike_ratio"] = 1.0
+            df["gtrends_spike_flag"]  = 0.0
+
+        df[["earnings_surprise_pct", "pead_signal"]] = \
+            df[["earnings_surprise_pct", "pead_signal"]].fillna(0.0)
+        df[["gtrends_spike_ratio", "gtrends_spike_flag"]] = \
+            df[["gtrends_spike_ratio", "gtrends_spike_flag"]].fillna({"gtrends_spike_ratio": 1.0,
+                                                                       "gtrends_spike_flag": 0.0})
+        records.append(df)
 
     if not records:
         raise ValueError("No feature data could be built — check yfinance connectivity.")
@@ -129,16 +172,20 @@ def build_features(period: str = "1y") -> pd.DataFrame:
     result = pd.concat(records)
     result.index.name = "date"
     result = result.reset_index()
-    print(f"  Built {len(result)} samples across {result['ticker'].nunique()} stocks.")
+    print(f"  Built {len(result)} samples across {result['ticker'].nunique()} stocks "
+          f"with {len(FEATURE_COLS)} features.")
     return result
 
 
 def get_live_features(ticker: str) -> dict | None:
     """
-    Compute today's feature vector for a single ticker.
-    Downloads ~1yr of data. Called at inference time in the live pipeline.
+    Compute today's full feature vector for a single ticker.
+    Includes technical + PEAD + Google Trends features.
     Returns a dict keyed by FEATURE_COLS, or None on failure.
     """
+    from data.earnings_tracker import get_live_pead
+    from data.google_trends import get_live_trends
+
     sector_etf = SECTOR_MAP.get(ticker, "SPY")
     needed = list({ticker, sector_etf, "SPY", "^VIX"})
 
@@ -162,4 +209,29 @@ def get_live_features(ticker: str) -> dict | None:
         return None
 
     row = df.iloc[-1]
-    return {col: float(row[col]) for col in FEATURE_COLS}
+    base = {col: float(row[col]) for col in [
+        "rsi", "macd_hist", "bb_pos", "atr_pct", "volume_ratio",
+        "ret_5d", "ret_21d", "ret_63d", "momentum_12_1",
+        "price_vs_sma20", "price_vs_sma50",
+        "sector_ret_5d", "spy_ret_5d", "vix",
+    ]}
+
+    # PEAD
+    try:
+        pead = get_live_pead(ticker)
+        base["earnings_surprise_pct"] = pead.get("earnings_surprise_pct", 0.0)
+        base["pead_signal"]           = pead.get("pead_signal", 0.0)
+    except Exception:
+        base["earnings_surprise_pct"] = 0.0
+        base["pead_signal"]           = 0.0
+
+    # Google Trends
+    try:
+        trends = get_live_trends(ticker)
+        base["gtrends_spike_ratio"] = trends.get("gtrends_spike_ratio", 1.0)
+        base["gtrends_spike_flag"]  = trends.get("gtrends_spike_flag", 0.0)
+    except Exception:
+        base["gtrends_spike_ratio"] = 1.0
+        base["gtrends_spike_flag"]  = 0.0
+
+    return base

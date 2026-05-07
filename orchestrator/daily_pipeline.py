@@ -210,22 +210,60 @@ def run_daily_pipeline():
         style = style_out.data.get("style", "balanced")
         print(f"  Style: {style.upper()} (conf={style_out.data.get('confidence', 0):.1f})")
 
+        # Options flow signals (live, parallel fetch)
+        print("  Fetching options flow signals...")
+        options_signals = {}
+        try:
+            from data.options_flow import get_options_signal
+            from concurrent.futures import ThreadPoolExecutor as _TPE
+            with _TPE(max_workers=5) as _pool:
+                _futs = {_pool.submit(get_options_signal, t): t for t in stock_analyses}
+                for _f in _futs:
+                    options_signals[_futs[_f]] = _f.result()
+            bullish_options = [t for t, s in options_signals.items()
+                               if s.get("options_composite", 0) > 0.2]
+            print(f"  Options: {len(bullish_options)} bullish flow signals")
+        except Exception as e:
+            print(f"  [OPTIONS] Failed (non-fatal): {e}")
+
+        # Pairs trading signals
+        pairs_adjustments = {}
+        try:
+            from data.pairs_trading import find_cointegrated_pairs, get_pairs_signals, pairs_to_weight_adjustments
+            pairs = find_cointegrated_pairs(list(stock_analyses.keys()))
+            if pairs:
+                pair_sigs = get_pairs_signals(pairs)
+                pairs_adjustments = pairs_to_weight_adjustments(pair_sigs)
+                if pairs_adjustments:
+                    print(f"  Pairs: long signals for {list(pairs_adjustments.keys())}")
+        except Exception as e:
+            print(f"  [PAIRS] Failed (non-fatal): {e}")
+
         # Portfolio Decision — use vector RAG for reflection context
         vm = VectorMemory()
         reflection_query = f"portfolio allocation {style} style {session_date}"
         reflection = vm.retrieve_similar(reflection_query, n_results=5)
         portfolio_out = portfolio_agent.run({
-            "stock_analyses": stock_analyses,
+            "stock_analyses":   stock_analyses,
             "current_holdings": current_holdings_pct,
-            "cash_pct": cash_pct,
-            "trading_style": style,
-            "reflection_text": reflection,
+            "cash_pct":         cash_pct,
+            "trading_style":    style,
+            "reflection_text":  reflection,
+            "options_signals":  options_signals,
         })
         log_agent_output(portfolio_out, date_str=session_date)
 
         weights = portfolio_out.data.get("weights", {})
         cash = portfolio_out.data.get("cash_reserve", 1.0)
         rationale = portfolio_out.data.get("rationale", "")
+
+        # Apply pairs trading overlays (cap total weight at 1.0)
+        if pairs_adjustments:
+            for t, delta in pairs_adjustments.items():
+                weights[t] = weights.get(t, 0.0) + delta
+            total_w = sum(weights.values())
+            if total_w > 1.0:
+                weights = {t: w / total_w for t, w in weights.items()}
 
     except Exception as exc:
         print(f"  [ERROR] Phase 2 failed: {exc} - defaulting to all-cash")
