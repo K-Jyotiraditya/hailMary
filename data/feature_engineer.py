@@ -123,7 +123,7 @@ def _features_for(ticker: str, close_all: pd.DataFrame, volume_all: pd.DataFrame
     return df.dropna(subset=BASE_COLS + ["label"])
 
 
-def build_features(period: str = "2y") -> pd.DataFrame:
+def build_features(period: str = "10y") -> pd.DataFrame:
     """Download history for all watchlist stocks and return feature + label matrix."""
     from data.earnings_tracker import build_pead_features
     from data.google_trends import build_trends_features

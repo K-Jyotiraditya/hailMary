@@ -1,10 +1,14 @@
 """
-S&P 500 Universe Screener.
+Combined Universe Screener: S&P 500 + S&P MidCap 400.
 
-Weekly: screens S&P 500 down to 50-80 high-quality candidates using:
+Weekly: screens ~700 stocks down to 50-80 high-quality candidates using:
   - Momentum: 200-day MA filter + 12-1 month return top quartile
-  - Liquidity: avg daily dollar volume > $100M
-  - Quality: positive earnings (no negative P/E), market cap > $5B
+  - Liquidity: avg daily dollar volume > $50M (lower bar for mid-caps)
+  - Excludes penny stocks and tickers with insufficient history
+
+Mid-caps are included because they have LESS analyst coverage than
+mega-caps, which means information asymmetry exists — our signals can
+actually have predictive power there.
 
 Results cached to data/universe_cache.json for 7 days.
 Import get_universe() instead of WATCHLIST when using the Phase 2 pipeline.
@@ -64,11 +68,58 @@ SP500_TICKERS = [
 # De-duplicate
 SP500_TICKERS = list(dict.fromkeys(SP500_TICKERS))
 
-MIN_AVG_DOLLAR_VOL = 100e6   # $100M/day average
-MIN_MARKET_CAP = 5e9          # $5B
-TOP_MOMENTUM_PCT = 0.50       # Keep top 50% by 12-1 month momentum
-MAX_CANDIDATES = 80
-MIN_CANDIDATES = 20
+# S&P MidCap 400 — curated liquid names across sectors
+# Less analyst coverage = more information asymmetry = real ML edge
+MIDCAP_TICKERS = [
+    # Technology / Software
+    "PSTG", "GTLB", "WK", "PCTY", "FOUR", "QLYS", "ALTR", "NEWR",
+    "JAMF", "YEXT", "HUBS", "DOMO", "BRZE", "CFLT", "TASK", "BILL",
+    # Semiconductors (mid)
+    "FORM", "DIOD", "LSCC", "RMBS", "SITM", "SMTC", "CEVA", "AMBA",
+    # Financials / Regional Banks
+    "FHN", "IBKR", "EWBC", "SNV", "WTFC", "CFR", "COLB", "FNB",
+    "WAL", "BANR", "BOKF", "CADE", "FFIN", "INDB", "SBCF", "PACW",
+    "NBTB", "WSFS", "TCBI", "EFSC",
+    # Insurance / Finance Services
+    "GSHD", "RYAN", "AON", "EG", "RLI", "SIGI",
+    # Healthcare / Biotech mid
+    "EXAS", "INSP", "RDNT", "OMCL", "PDCO", "ACAD", "HIMS", "TMDX",
+    "DOCS", "PRVA", "SGRY", "TXG", "ITCI", "ACLS", "AMED", "HALO",
+    "NVCR", "PTGX", "RYTM", "SWTX", "VKTX",
+    # Consumer Discretionary
+    "RH", "WING", "BOOT", "SFM", "PFGC", "CHUY", "EYE", "ONON",
+    "SHAK", "MODG", "GENI", "JACK", "CAKE", "BJ", "GPI", "LAD",
+    # Consumer Staples (mid)
+    "CHEF", "INGR", "SPTN", "UNFI", "USFD", "CASY", "GO",
+    # Industrials
+    "FLR", "KNX", "SAIA", "GXO", "HUBG", "MATX", "GATX",
+    "WSC", "LSTR", "WERN", "AL", "CAR", "TRN", "AIT", "ESE",
+    "KTOS", "MOOG", "SPXC", "TDW",
+    # Energy (mid)
+    "CIVI", "MGY", "MTDR", "SM", "VTLE", "DINO", "CHRD", "DEN",
+    "MUR", "OVV", "REI", "TALO", "PARR",
+    # Materials
+    "CLF", "CRS", "HCC", "KALU", "NEU", "SLVM", "MP", "TREX",
+    "UFPI", "SUM", "STLD", "OMG", "HWKN",
+    # Real Estate
+    "BNL", "CDP", "HIW", "IRT", "KRG", "LXP", "PDM", "RLJ",
+    "SKT", "STAG", "SAFE", "PLYM", "RPT",
+    # Utilities (mid)
+    "ALE", "AVA", "MGEE", "NWE", "OGS", "OTTR", "SJW", "SWX",
+    # Communication / Media
+    "CARG", "DLB", "MSGS", "SBGI", "CARS", "IDT", "IACI",
+]
+
+# De-duplicate mid-caps
+MIDCAP_TICKERS = list(dict.fromkeys(MIDCAP_TICKERS))
+
+# Combined universe
+FULL_UNIVERSE = list(dict.fromkeys(SP500_TICKERS + MIDCAP_TICKERS))
+
+MIN_AVG_DOLLAR_VOL = 50e6    # $50M/day (lower bar covers mid-caps)
+TOP_MOMENTUM_PCT   = 0.50    # Keep top 50% by 12-1 month momentum
+MAX_CANDIDATES     = 80
+MIN_CANDIDATES     = 20
 
 
 def _load_cache() -> list | None:
@@ -103,11 +154,11 @@ def screen_universe(force_refresh: bool = False) -> list:
             print(f"  [Universe] Using cached universe ({len(cached)} stocks, refreshes weekly)")
             return cached
 
-    print(f"  [Universe] Screening {len(SP500_TICKERS)} S&P 500 stocks...")
+    print(f"  [Universe] Screening {len(FULL_UNIVERSE)} stocks (S&P 500 + MidCap 400)...")
 
     try:
         raw = yf.download(
-            SP500_TICKERS, period="14mo", auto_adjust=True,
+            FULL_UNIVERSE, period="14mo", auto_adjust=True,
             progress=False, threads=True
         )
     except Exception as e:

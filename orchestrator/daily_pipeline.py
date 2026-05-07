@@ -222,6 +222,19 @@ def run_daily_pipeline():
             for ticker, p in state["positions"].items()
         }
 
+    # ── Event-Driven Triggers (between Phase 1 and 2) ──
+    print(f"\n[Events] Checking PEAD + insider cluster triggers...\n")
+    event_signals = {}
+    event_weights = {}
+    try:
+        from data.event_triggers import get_all_event_signals, summarize_events
+        event_signals = get_all_event_signals(list(stock_analyses.keys()))
+        print(summarize_events(event_signals))
+        # Pre-allocate event-driven weights
+        event_weights = {t: info["total_allocation"] for t, info in event_signals.items()}
+    except Exception as e:
+        print(f"  [Events] Failed (non-fatal): {e}")
+
     # ── Phase 2: Portfolio-Level Decisions ──
     print(f"\n[Phase 2] Portfolio-level intelligence...\n")
 
@@ -316,6 +329,18 @@ def run_daily_pipeline():
             total_w = sum(weights.values())
             if total_w > 1.0:
                 weights = {t: w / total_w for t, w in weights.items()}
+
+        # Merge event-driven weights (these are additive on top of HRP/LLM)
+        if event_weights:
+            already_event_allocated = sum(event_weights.values())
+            for t, ew in event_weights.items():
+                weights[t] = weights.get(t, 0.0) + ew
+            # Re-normalise to keep total <= 1.0
+            total_w = sum(weights.values())
+            if total_w > 1.0:
+                weights = {t: w / total_w for t, w in weights.items()}
+            print(f"\n  [Events] Added {len(event_weights)} event-driven positions "
+                  f"({already_event_allocated:.1%} allocation)")
 
         # Apply macro regime equity multiplier (scale down in neutral/risk-off)
         equity_mult = macro.get("equity_mult", 1.0)

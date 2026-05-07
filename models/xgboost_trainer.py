@@ -233,7 +233,14 @@ def predict(features: dict) -> tuple[float, str]:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--period", default="1y",
-                        help="yfinance period string: 1y, 2y, max")
+    parser.add_argument("--period", default="10y",
+                        help="yfinance period string: 2y, 5y, 10y, max (default: 10y)")
+    parser.add_argument("--walk-forward", action="store_true",
+                        help="Run walk-forward CV first, then train final model")
     args = parser.parse_args()
+
+    if args.walk_forward:
+        from models.walk_forward import run_walk_forward
+        run_walk_forward(period=args.period)
+
     train(period=args.period)
