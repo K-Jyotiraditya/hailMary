@@ -2,8 +2,9 @@
 Daily Orchestrator — Runs the full TradingGroup V2 pipeline.
 
 Sequence:
-  1. For each stock: News → Technical → Fundamentals (per-stock agents)
-  2. Once: Risk-Style → Portfolio-Decision (portfolio-level agents)
+  0. Macro regime gate + universe screen (weekly)
+  1. For each stock: News -> Technical -> Fundamentals (per-stock agents)
+  2. Once: Risk-Style -> HRP weights -> Portfolio-Decision overlay
   3. Risk Management: check existing positions, override weights if needed
   4. Log all agent outputs
   5. Execute via Alpaca (if connected)
@@ -156,16 +157,47 @@ def run_daily_pipeline():
         print("  Then retry:    python orchestrator/daily_pipeline.py\n")
         return {}
 
+    # ── Phase 0: Macro Regime + Universe Screen ──
+    print(f"\n[Phase 0] Macro regime detection + universe screening...\n")
+
+    macro = {"regime": "neutral", "equity_mult": 0.7, "signals": []}
+    try:
+        from data.macro_regime import get_macro_regime
+        macro = get_macro_regime()
+        print(f"  Macro regime: {macro['regime'].upper()} "
+              f"(equity_mult={macro['equity_mult']:.1f}) "
+              f"| VIX={macro['vix']:.1f} "
+              f"| YieldSpread={macro['yield_spread']:.3f} "
+              f"| Credit={macro['credit_spread']:.3f}")
+        print(f"  Signals: {', '.join(macro['signals'])}")
+    except Exception as e:
+        print(f"  [Macro] Failed ({e}) - defaulting to neutral")
+
+    # Universe screen: use cached weekly candidates, fallback to static watchlist
+    active_universe = WATCHLIST
+    try:
+        from config.universe import get_universe
+        active_universe = get_universe()
+        print(f"\n  Universe: {len(active_universe)} stocks selected from S&P 500 screen")
+    except Exception as e:
+        print(f"  [Universe] Failed ({e}) - using static watchlist ({len(WATCHLIST)} stocks)")
+
+    if macro["regime"] == "risk_off":
+        print(f"\n  [!] RISK-OFF regime detected — reducing equity exposure to "
+              f"{macro['equity_mult']:.0%}. Watchlist trimmed to top 10 by momentum.")
+        # In risk-off: only run top 10 most liquid/safest stocks
+        active_universe = active_universe[:10]
+
     style_agent = RiskStyleAgent()
     portfolio_agent = PortfolioDecisionAgent()
 
     # ── Phase 1: Per-Stock Analysis (parallel) ──
-    print(f"\n[Phase 1] Analyzing {len(WATCHLIST)} stocks in parallel (5 workers)...\n")
+    print(f"\n[Phase 1] Analyzing {len(active_universe)} stocks in parallel (5 workers)...\n")
     stock_analyses = {}
 
     futures_map = {}
     with ThreadPoolExecutor(max_workers=5) as pool:
-        for ticker in WATCHLIST:
+        for ticker in active_universe:
             futures_map[pool.submit(_analyze_stock, ticker, session_date)] = ticker
 
         for future in as_completed(futures_map):
@@ -239,6 +271,19 @@ def run_daily_pipeline():
         except Exception as e:
             print(f"  [PAIRS] Failed (non-fatal): {e}")
 
+        # HRP base weights — mathematically diversified allocation
+        hrp_weights = {}
+        try:
+            from models.hrp import compute_hrp_weights
+            candidate_tickers = list(stock_analyses.keys())
+            print(f"  Computing HRP weights for {len(candidate_tickers)} candidates...")
+            hrp_weights = compute_hrp_weights(candidate_tickers)
+            print(f"  HRP complete. Top 5: " +
+                  ", ".join(f"{t}={w:.1%}" for t, w in
+                             sorted(hrp_weights.items(), key=lambda x: x[1], reverse=True)[:5]))
+        except Exception as e:
+            print(f"  [HRP] Failed ({e}) - LLM will determine weights")
+
         # Portfolio Decision — use vector RAG for reflection context
         vm = VectorMemory()
         reflection_query = f"portfolio allocation {style} style {session_date}"
@@ -250,10 +295,17 @@ def run_daily_pipeline():
             "trading_style":    style,
             "reflection_text":  reflection,
             "options_signals":  options_signals,
+            "hrp_weights":      hrp_weights,
         })
         log_agent_output(portfolio_out, date_str=session_date)
 
         weights = portfolio_out.data.get("weights", {})
+
+        # If LLM returned empty weights, fall back to HRP
+        if not weights and hrp_weights:
+            print("  [!] LLM returned no weights — using HRP weights directly")
+            weights = hrp_weights
+
         cash = portfolio_out.data.get("cash_reserve", 1.0)
         rationale = portfolio_out.data.get("rationale", "")
 
@@ -264,6 +316,14 @@ def run_daily_pipeline():
             total_w = sum(weights.values())
             if total_w > 1.0:
                 weights = {t: w / total_w for t, w in weights.items()}
+
+        # Apply macro regime equity multiplier (scale down in neutral/risk-off)
+        equity_mult = macro.get("equity_mult", 1.0)
+        if equity_mult < 1.0 and weights:
+            weights = {t: w * equity_mult for t, w in weights.items()}
+            regime = macro.get("regime", "neutral")
+            print(f"\n  [Macro] {regime.upper()} regime: equity weights scaled to "
+                  f"{equity_mult:.0%} (remaining {1 - equity_mult:.0%} held as cash)")
 
     except Exception as exc:
         print(f"  [ERROR] Phase 2 failed: {exc} - defaulting to all-cash")

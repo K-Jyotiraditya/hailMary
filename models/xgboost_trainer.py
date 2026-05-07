@@ -50,7 +50,7 @@ def train(period: str = "1y", test_frac: float = 0.20):
     print(f"  Period:    {df['date'].min().date()}  to  {df['date'].max().date()}")
     print(f"  Stocks:    {df['ticker'].nunique()}")
     print(f"  Samples:   {n_total} total | {n_train} train | {n_total - n_train} test")
-    print(f"  Pos rate:  {df['label'].mean():.1%} (days stock went up in 5d)\n")
+    print(f"  Pos rate:  {df['label'].mean():.1%} (days stock beats SPY in 5d)\n")
 
     X_train = train_df[FEATURE_COLS].values
     y_train = train_df["label"].values
@@ -138,8 +138,8 @@ def train(period: str = "1y", test_frac: float = 0.20):
                "acc": round(acc, 4), "usable": model_is_usable}
     if not model_is_usable:
         print(f"\n  [!] Model quality below threshold (AUC={auc:.3f}, IC={ic:.4f}).")
-        print("      Pipeline will fall back to LLM until better features are added.")
-        print("      To improve: add FinBERT sentiment + cross-stock features, then retrain.\n")
+        print("      Pipeline will fall back to LLM until model improves.")
+        print("      Tip: relative return label + insider_score usually flips IC positive.\n")
 
     # ── 8. Save ───────────────────────────────────────────────────────────────
     SAVE_DIR.mkdir(exist_ok=True)
