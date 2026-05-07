@@ -10,6 +10,7 @@ Sequence:
 """
 import sys
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -25,39 +26,8 @@ from agents.risk_style import RiskStyleAgent
 from agents.portfolio_decision import PortfolioDecisionAgent
 from agents.base_agent import log_agent_output, AgentOutput
 from data.market_data import yf_download
+from data.vector_memory import VectorMemory
 from risk.risk_manager import RiskManager
-
-
-def load_reflection(log_dir: str = "data/agent_logs", lookback_days: int = 5) -> str:
-    """Load and summarize recent agent decisions for self-reflection."""
-    log_path = Path(log_dir)
-    if not log_path.exists():
-        return "No previous trading history available."
-
-    logs = sorted(log_path.glob("*.json"), reverse=True)[:lookback_days]
-    if not logs:
-        return "No previous trading history available."
-
-    summary_lines = []
-    for log_file in logs:
-        try:
-            with open(log_file) as f:
-                entries = json.load(f)
-            portfolio_entries = [e for e in entries if e.get("agent") == "Portfolio-Decision"]
-            if portfolio_entries:
-                entry = portfolio_entries[-1]
-                weights = entry.get("data", {}).get("weights", {})
-                rationale = entry.get("data", {}).get("rationale", "")
-                summary_lines.append(
-                    f"  {log_file.stem}: Allocated to {list(weights.keys())} — {rationale}"
-                )
-        except Exception:
-            continue
-
-    if not summary_lines:
-        return "No previous portfolio decisions found."
-
-    return "Recent decisions:\n" + "\n".join(summary_lines)
 
 
 def load_current_positions() -> dict:
@@ -74,6 +44,11 @@ def load_current_positions() -> dict:
 
 def save_portfolio_state(weights: dict, equity: float = 100000):
     """Save the portfolio state for next-day risk monitoring."""
+
+    # Preserve the original starting_equity across saves so the circuit breaker
+    # can detect cumulative drawdown from the account baseline, not just today.
+    existing = load_current_positions()
+    starting_equity = existing.get("starting_equity", equity)
 
     positions = {}
     for ticker, w in weights.items():
@@ -96,7 +71,7 @@ def save_portfolio_state(weights: dict, equity: float = 100000):
     state = {
         "positions": positions,
         "equity": equity,
-        "starting_equity": equity,
+        "starting_equity": starting_equity,
         "last_update": datetime.now().isoformat(),
     }
     Path("data").mkdir(exist_ok=True)
@@ -114,10 +89,64 @@ def check_ollama() -> bool:
         return False
 
 
+def _analyze_stock(ticker: str, session_date: str) -> tuple:
+    """Worker: analyze one stock with its own agent instances (thread-safe)."""
+    news_agent = NewsSentimentAgent()
+    tech_agent = TechnicalForecasterAgent()
+    fund_agent = FundamentalsAgent()
+    try:
+        news_out = news_agent.run({"ticker": ticker})
+        news_out.data["ticker"] = ticker
+        log_agent_output(news_out, date_str=session_date)
+        sent_data = news_out.data
+
+        tech_out = tech_agent.run({
+            "ticker": ticker,
+            "sentiment_score": sent_data.get("sentiment_score", 0),
+            "news_theme": sent_data.get("key_theme", ""),
+        })
+        tech_out.data["ticker"] = ticker
+        log_agent_output(tech_out, date_str=session_date)
+        tech_data = tech_out.data
+
+        fund_out = fund_agent.run({"ticker": ticker})
+        fund_out.data["ticker"] = ticker
+        log_agent_output(fund_out, date_str=session_date)
+        fund_data = fund_out.data
+
+        result = {
+            "sentiment": sent_data,
+            "technical": tech_data,
+            "fundamentals": fund_data,
+        }
+        summary = (
+            f"  -- {ticker} -- "
+            f"News:{sent_data.get('sentiment_score', 0):+.2f} | "
+            f"Tech:{tech_data.get('direction', '?')}(conf={tech_data.get('confidence', 0):.1f}) | "
+            f"Fund:{fund_data.get('health_score', 50)}/100"
+        )
+        return ticker, result, summary, None
+
+    except Exception as exc:
+        err_out = AgentOutput(
+            agent_name="Pipeline-Error",
+            data={"ticker": ticker, "error": str(exc)},
+            reasoning=f"Unhandled exception during {ticker} analysis",
+        )
+        log_agent_output(err_out, date_str=session_date)
+        fallback = {
+            "sentiment":    {"sentiment_score": 0.0, "confidence": 0.0, "key_theme": "analysis failed"},
+            "technical":    {"direction": "sideways", "confidence": 0.0, "gate": "ERROR"},
+            "fundamentals": {"health_score": 50, "key_strength": "", "key_risk": ""},
+        }
+        return ticker, fallback, f"  -- {ticker} -- [ERROR] {exc}", exc
+
+
 def run_daily_pipeline():
     """Execute the complete daily trading pipeline."""
+    session_date = datetime.now().strftime('%Y-%m-%d')
     print("=" * 70)
-    print(f"  TRADINGGROUP V2 — DAILY PIPELINE")
+    print(f"  TRADINGGROUP V2 - DAILY PIPELINE")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
@@ -127,60 +156,22 @@ def run_daily_pipeline():
         print("  Then retry:    python orchestrator/daily_pipeline.py\n")
         return {}
 
-    news_agent = NewsSentimentAgent()
-    tech_agent = TechnicalForecasterAgent()
-    fund_agent = FundamentalsAgent()
     style_agent = RiskStyleAgent()
     portfolio_agent = PortfolioDecisionAgent()
 
-    # ── Phase 1: Per-Stock Analysis ──
-    print(f"\n[Phase 1] Analyzing {len(WATCHLIST)} stocks...\n")
+    # ── Phase 1: Per-Stock Analysis (parallel) ──
+    print(f"\n[Phase 1] Analyzing {len(WATCHLIST)} stocks in parallel (5 workers)...\n")
     stock_analyses = {}
 
-    for ticker in WATCHLIST:
-        print(f"  ── {ticker} ──")
-        try:
-            # News
-            news_out = news_agent.run({"ticker": ticker})
-            log_agent_output(news_out)
-            sent_data = news_out.data
-            print(f"    News:  sentiment={sent_data.get('sentiment_score', 0):+.2f} | {sent_data.get('key_theme', '')[:50]}")
+    futures_map = {}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for ticker in WATCHLIST:
+            futures_map[pool.submit(_analyze_stock, ticker, session_date)] = ticker
 
-            # Technical (inject sentiment context)
-            tech_out = tech_agent.run({
-                "ticker": ticker,
-                "sentiment_score": sent_data.get("sentiment_score", 0),
-                "news_theme": sent_data.get("key_theme", ""),
-            })
-            log_agent_output(tech_out)
-            tech_data = tech_out.data
-            print(f"    Tech:  {tech_data.get('direction', '?')} (conf={tech_data.get('confidence', 0):.1f}) | {tech_data.get('gate', '')}")
-
-            # Fundamentals
-            fund_out = fund_agent.run({"ticker": ticker})
-            log_agent_output(fund_out)
-            fund_data = fund_out.data
-            print(f"    Fund:  health={fund_data.get('health_score', 50)}/100")
-
-            stock_analyses[ticker] = {
-                "sentiment": sent_data,
-                "technical": tech_data,
-                "fundamentals": fund_data,
-            }
-
-        except Exception as exc:
-            print(f"    [ERROR] {ticker} agent failed: {exc} — skipping, using neutral defaults")
-            err_out = AgentOutput(
-                agent_name="Pipeline-Error",
-                data={"ticker": ticker, "error": str(exc)},
-                reasoning=f"Unhandled exception during {ticker} analysis",
-            )
-            log_agent_output(err_out)
-            stock_analyses[ticker] = {
-                "sentiment":    {"sentiment_score": 0.0, "confidence": 0.0, "key_theme": "analysis failed"},
-                "technical":    {"direction": "sideways", "confidence": 0.0, "gate": "ERROR"},
-                "fundamentals": {"health_score": 50, "key_strength": "", "key_risk": ""},
-            }
+        for future in as_completed(futures_map):
+            ticker_result, analysis, summary, error = future.result()
+            print(summary)
+            stock_analyses[ticker_result] = analysis
 
     # Load portfolio state once — shared by Phase 2 and Phase 3
     state = load_current_positions()
@@ -215,12 +206,14 @@ def run_daily_pipeline():
             "current_drawdown_pct": 0,
             "recent_win_rate": 0.5,
         })
-        log_agent_output(style_out)
+        log_agent_output(style_out, date_str=session_date)
         style = style_out.data.get("style", "balanced")
         print(f"  Style: {style.upper()} (conf={style_out.data.get('confidence', 0):.1f})")
 
-        # Portfolio Decision
-        reflection = load_reflection()
+        # Portfolio Decision — use vector RAG for reflection context
+        vm = VectorMemory()
+        reflection_query = f"portfolio allocation {style} style {session_date}"
+        reflection = vm.retrieve_similar(reflection_query, n_results=5)
         portfolio_out = portfolio_agent.run({
             "stock_analyses": stock_analyses,
             "current_holdings": current_holdings_pct,
@@ -228,20 +221,20 @@ def run_daily_pipeline():
             "trading_style": style,
             "reflection_text": reflection,
         })
-        log_agent_output(portfolio_out)
+        log_agent_output(portfolio_out, date_str=session_date)
 
         weights = portfolio_out.data.get("weights", {})
         cash = portfolio_out.data.get("cash_reserve", 1.0)
         rationale = portfolio_out.data.get("rationale", "")
 
     except Exception as exc:
-        print(f"  [ERROR] Phase 2 failed: {exc} — defaulting to all-cash")
+        print(f"  [ERROR] Phase 2 failed: {exc} - defaulting to all-cash")
         err_out = AgentOutput(
             agent_name="Pipeline-Error",
             data={"phase": 2, "error": str(exc)},
             reasoning="Unhandled exception in Phase 2",
         )
-        log_agent_output(err_out)
+        log_agent_output(err_out, date_str=session_date)
 
     # ── Phase 3: Risk Management ──
     print(f"\n[Phase 3] Risk management checks...\n")
@@ -285,9 +278,9 @@ def run_daily_pipeline():
             data={"actions": [{"ticker": a.ticker, "action": a.action, "pnl": a.pnl_pct} for a in actions]},
             reasoning=risk_mgr.summary(actions),
         )
-        log_agent_output(risk_log)
+        log_agent_output(risk_log, date_str=session_date)
     else:
-        print("  No existing positions to monitor. First run — all clear.")
+        print("  No existing positions to monitor. First run - all clear.")
 
         # Show what thresholds WOULD be for the proposed portfolio
         if weights:
@@ -296,9 +289,17 @@ def run_daily_pipeline():
                 sl, tp = risk_mgr.compute_thresholds(ticker)
                 print(f"    {ticker}: SL=-{sl:.1f}% | TP=+{tp:.1f}%")
 
+        # Always log a Risk-Management entry so Phase 3 shows complete in the dashboard
+        risk_log = AgentOutput(
+            agent_name="Risk-Management",
+            data={"actions": []},
+            reasoning="No existing positions. Risk checks not required.",
+        )
+        log_agent_output(risk_log, date_str=session_date)
+
     # ── Output ──
     print(f"\n{'=' * 70}")
-    print(f"  FINAL TARGET PORTFOLIO — {datetime.now().strftime('%Y-%m-%d')}")
+    print(f"  FINAL TARGET PORTFOLIO - {datetime.now().strftime('%Y-%m-%d')}")
     print(f"  Style: {style.upper()} | Cash Reserve: {cash:.1%}")
     print(f"{'=' * 70}")
 
@@ -306,7 +307,7 @@ def run_daily_pipeline():
         print("  [ALL CASH] No positions recommended today.")
     else:
         print(f"  {'Ticker':<10} {'Weight':>8}  {'Direction':>10}  {'Sentiment':>10}  {'Health':>8}")
-        print(f"  {'─'*10} {'─'*8}  {'─'*10}  {'─'*10}  {'─'*8}")
+        print(f"  {'-'*10} {'-'*8}  {'-'*10}  {'-'*10}  {'-'*8}")
         for ticker, w in sorted(weights.items(), key=lambda x: x[1], reverse=True):
             analysis = stock_analyses.get(ticker, {})
             direction = analysis.get("technical", {}).get("direction", "?")
@@ -317,10 +318,21 @@ def run_daily_pipeline():
     print(f"\n  Rationale: {rationale}")
     print(f"{'=' * 70}\n")
 
-    # Save state for tomorrow's risk monitoring
+    # Save state for tomorrow's risk monitoring + vector memory
     if weights:
-        save_portfolio_state(weights)
+        save_portfolio_state(weights, equity)
         print("  [STATE] Portfolio state saved for next-day risk monitoring.\n")
+        try:
+            vm = VectorMemory()
+            vm.store_decision(
+                date=session_date,
+                weights=weights,
+                rationale=rationale,
+                style=style,
+            )
+            print(f"  [MEMORY] Decision stored in vector memory ({vm.count()} total).\n")
+        except Exception as e:
+            print(f"  [MEMORY] Vector store failed (non-fatal): {e}\n")
 
     # ── Phase 4: Live Execution ──
     print(f"\n[Phase 4] Alpaca Paper Execution...\n")

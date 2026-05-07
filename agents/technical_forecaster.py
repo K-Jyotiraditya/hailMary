@@ -138,7 +138,7 @@ Respond with ONLY a JSON object:
 
         if not indicators:
             from agents.base_agent import AgentOutput
-            return AgentOutput(self.NAME, {"direction": "sideways", "confidence": 0.0}, "No data")
+            return AgentOutput(self.NAME, {"direction": "sideways", "confidence": 0.0, "gate": "NO_DATA"}, "No data")
 
         context["indicators"] = indicators
         prompt = self.build_prompt(context)

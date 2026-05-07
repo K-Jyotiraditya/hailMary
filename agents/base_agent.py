@@ -5,8 +5,10 @@ Handles Ollama LLM calls, prompt templating, structured JSON parsing,
 retry logic, and agent output logging.
 """
 import json
+import math
 import os
 import re
+import threading
 import time
 import requests
 from pathlib import Path
@@ -68,7 +70,10 @@ class BaseAgent:
                 )
                 response.raise_for_status()
                 body = response.json()
-                return body.get("response", "") if isinstance(body, dict) else ""
+                raw = body.get("response", "") if isinstance(body, dict) else ""
+                if not raw.strip():
+                    print(f"[{self.NAME}] WARNING: LLM returned empty response — using fallback defaults")
+                return raw
             except Exception as e:
                 if attempt == self.MAX_RETRIES - 1:
                     print(f"[{self.NAME}] LLM call failed after {self.MAX_RETRIES} attempts: {e}")
@@ -116,19 +121,35 @@ class BaseAgent:
         return AgentOutput(agent_name=self.NAME, data=data, reasoning=raw)
 
 
-def log_agent_output(output: AgentOutput, log_dir: str = "data/agent_logs"):
-    """Persist agent output to the daily log file."""
+def _sanitize(obj):
+    """Recursively replace NaN/inf floats with None so json.dump produces valid JSON."""
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
+_LOG_LOCK = threading.Lock()
+
+
+def log_agent_output(output: AgentOutput, log_dir: str = "data/agent_logs", date_str: Optional[str] = None):
+    """Persist agent output to the daily log file (thread-safe)."""
     Path(log_dir).mkdir(parents=True, exist_ok=True)
-    log_path = Path(log_dir) / f"{datetime.now().strftime('%Y-%m-%d')}.json"
+    day = date_str or datetime.now().strftime('%Y-%m-%d')
+    log_path = Path(log_dir) / f"{day}.json"
 
-    entries: list = []
-    if log_path.exists():
-        try:
-            with open(log_path) as f:
-                entries = json.load(f)
-        except json.JSONDecodeError:
-            entries = []
+    with _LOG_LOCK:
+        entries: list = []
+        if log_path.exists():
+            try:
+                with open(log_path) as f:
+                    entries = json.load(f)
+            except json.JSONDecodeError:
+                entries = []
 
-    entries.append(output.to_dict())
-    with open(log_path, "w") as f:
-        json.dump(entries, f, indent=2, default=str)
+        entries.append(output.to_dict())
+        with open(log_path, "w") as f:
+            json.dump(_sanitize(entries), f, indent=2, default=str)

@@ -85,7 +85,7 @@ def parse_daily_log(date_str: str) -> Optional[dict]:
     )
 
     last_ts = entries[-1]["timestamp"] if entries else None
-    error_tickers = [e["data"].get("ticker") for e in errors]
+    error_tickers = [e["data"].get("ticker") for e in errors if e["data"].get("ticker")]
 
     return {
         "date": date_str,

@@ -43,6 +43,9 @@ class BaseBrokerExecution:
             target_val = target_dollars.get(symbol, 0.0)
             if target_val < current_val:
                 sell_amount = current_val - target_val
+                # Apply 0.1% haircut: Alpaca computes share qty from notional at current price,
+                # which may exceed available shares if price moved since we fetched market_value.
+                sell_amount = sell_amount * 0.999
                 if sell_amount > (equity * 0.005): # Min threshold 0.5% turnover
                     self.submit_market_order(symbol, sell_amount, 'SELL')
                     
