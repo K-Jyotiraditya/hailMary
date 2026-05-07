@@ -133,11 +133,35 @@ Respond with ONLY a JSON object:
         }
 
     def run(self, context: Dict[str, Any]):
-        ticker = context["ticker"]
-        indicators = self._compute_indicators(ticker)
+        from agents.base_agent import AgentOutput
 
+        ticker = context["ticker"]
+
+        # ── Try XGBoost model first ───────────────────────────────────────────
+        try:
+            from data.feature_engineer import get_live_features
+            from models.xgboost_trainer import predict as xgb_predict, MODEL_PATH
+            if MODEL_PATH.exists():
+                feats = get_live_features(ticker)
+                if feats:
+                    prob, direction = xgb_predict(feats)
+                    confidence = abs(prob - 0.5) * 2  # map 0.5→0, 1.0→1
+                    indicators = self._compute_indicators(ticker)
+                    gate_result = self._hybrid_gate(indicators or {}, {"direction": direction, "confidence": confidence})
+                    return AgentOutput(self.NAME, {
+                        "direction":  gate_result["direction"],
+                        "confidence": round(gate_result["confidence"], 3),
+                        "gate":       gate_result["gate"],
+                        "prob_up":    round(prob, 3),
+                        "source":     "xgboost",
+                        "indicators": indicators or {},
+                    }, f"XGBoost p_up={prob:.3f}")
+        except Exception as e:
+            print(f"[Technical] XGBoost inference failed for {ticker}: {e} — falling back to LLM")
+
+        # ── Fallback: LLM ────────────────────────────────────────────────────
+        indicators = self._compute_indicators(ticker)
         if not indicators:
-            from agents.base_agent import AgentOutput
             return AgentOutput(self.NAME, {"direction": "sideways", "confidence": 0.0, "gate": "NO_DATA"}, "No data")
 
         context["indicators"] = indicators
@@ -145,10 +169,9 @@ Respond with ONLY a JSON object:
         raw = self.call_llm(prompt)
         llm_output = self.parse_response(raw)
 
-        # Apply hybrid gate
         gated = self._hybrid_gate(indicators, llm_output)
         gated["indicators"] = indicators
+        gated["source"] = "llm"
         gated["reasoning"] = llm_output.get("reasoning", "") + f" | Gate: {gated['gate']}"
 
-        from agents.base_agent import AgentOutput
         return AgentOutput(self.NAME, gated, raw)

@@ -82,11 +82,23 @@ Respond with ONLY a JSON object:
         }
 
     def run(self, context: Dict[str, Any]):
-        ticker = context["ticker"]
-        fundamentals = self._fetch_fundamentals(ticker)
+        from agents.base_agent import AgentOutput
 
+        ticker = context["ticker"]
+
+        # ── Multi-factor model (no LLM, pure math) ───────────────────────────
+        try:
+            from models.multi_factor import compute_factor_score
+            scores = compute_factor_score(ticker)
+            if scores.get("health_score", 50) != 50 or scores.get("key_strength"):
+                return AgentOutput(self.NAME, scores,
+                                   f"multi-factor: health={scores['health_score']}")
+        except Exception as e:
+            print(f"[Fundamentals] Multi-factor failed for {ticker}: {e} — falling back to LLM")
+
+        # ── Fallback: LLM ────────────────────────────────────────────────────
+        fundamentals = self._fetch_fundamentals(ticker)
         if not fundamentals:
-            from agents.base_agent import AgentOutput
             return AgentOutput(self.NAME, {"health_score": 50}, "No fundamental data available")
 
         context["fundamentals"] = fundamentals
